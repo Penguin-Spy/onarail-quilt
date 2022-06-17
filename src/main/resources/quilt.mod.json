@@ -1,25 +1,24 @@
 {
 	"schema_version": 1,
 	"quilt_loader": {
-		"group": "com.example",
-		"id": "example_mod",
+		"group": "io.github.penguin_spy",
+		"id": "onarail",
 		"version": "${version}",
 		"metadata": {
-			"name": "Mod Name",
-			"description": "A short description of your mod.",
+			"name": "On A Rail",
+			"description": " A Minecraft Quilt mod that fixes Furnace Minecart's train capabilities and makes hoppers work with them too.",
 			"contributors": {
-				"Me!": "Owner"
+				"Penguin_Spy": "Owner"
 			},
 			"contact": {
-				"homepage": "https://example.com/",
-				"issues": "https://github.com/QuiltMC/quilt-template-mod/issues",
-				"sources": "https://github.com/QuiltMC/quilt-template-mod"
+				"issues": "https://github.com/Penguin-Spy/onarail/issues",
+				"sources": "https://github.com/Penguin-Spy/onarail"
 			},
-			"icon": "assets/example_mod/icon.png"
+			"icon": "assets/onarail/icon.png"
 		},
 		"intermediate_mappings": "net.fabricmc:intermediary",
 		"entrypoints": {
-			"init": "com.example.example_mod.ExampleMod"
+			"init": "io.github.penguin_spy.onarail.OnARail"
 		},
 		"depends": [
 			{
@@ -36,5 +35,5 @@
 			}
 		]
 	},
-	"mixin": "example_mod.mixins.json"
+	"mixin": "onarail.mixins.json"
 }

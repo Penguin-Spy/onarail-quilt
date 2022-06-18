@@ -1,11 +1,7 @@
 package io.github.penguin_spy.onarail.mixin;
 
-import eu.pb4.sgui.api.ClickType;
-import eu.pb4.sgui.api.elements.GuiElementBuilder;
-import eu.pb4.sgui.api.elements.GuiElementInterface;
-import eu.pb4.sgui.api.gui.SimpleGui;
 import io.github.penguin_spy.onarail.OnARail;
-import net.fabricmc.fabric.api.registry.FuelRegistry;
+import io.github.penguin_spy.onarail.gui.FurnaceMinecartGUI;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.damage.DamageSource;
@@ -13,36 +9,22 @@ import net.minecraft.entity.mob.PiglinBrain;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.entity.vehicle.FurnaceMinecartEntity;
-import net.minecraft.entity.vehicle.StorageMinecartEntity;
-import net.minecraft.entity.vehicle.StorageVehicle;
 import net.minecraft.inventory.Inventories;
-import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SidedInventory;
-import net.minecraft.inventory.SimpleInventory;
-import net.minecraft.item.BannerItem;
-import net.minecraft.item.EnderPearlItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.screen.ScreenHandlerType;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.ItemScatterer;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameRules;
 import net.minecraft.world.World;
-import org.checkerframework.checker.units.qual.A;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -94,6 +76,10 @@ public abstract class FurnaceMinecartEntityMixin extends AbstractMinecartEntity 
 	public boolean canPlayerUse(PlayerEntity player) {
 		return !this.isRemoved() && this.getPos().isInRange(player.getPos(), 8.0);
 	}
+	public boolean isValid(int slot, ItemStack stack) {
+		// slot 4 must be empty, all other slots don't care
+		return slot != 4 || this.inventory.get(slot).isEmpty();
+	}
 
 	/* SidedInventory methods */
 	public int[] getAvailableSlots(Direction side) {
@@ -103,18 +89,13 @@ public abstract class FurnaceMinecartEntityMixin extends AbstractMinecartEntity 
 			return INSERT_SLOTS;
 		}
 	}
-
 	public boolean canInsert(int slot, ItemStack stack, @Nullable Direction dir) {
 		return switch (slot) {
-			case 3 -> // chunk_fuel
-				stack.getItem() instanceof EnderPearlItem;
-			case 4 -> // pattern
-				stack.getItem() instanceof BannerItem;
-			default -> // fuel slots
-				(FuelRegistry.INSTANCE.get(stack.getItem()) != null) && !(stack.getItem() instanceof BannerItem);
+			case 3 -> FurnaceMinecartGUI.ChunkFuelSlot.matches(stack);
+			case 4 -> FurnaceMinecartGUI.PatternSlot.matches(stack);// && this.inventory.get(slot).isEmpty();
+			default -> FurnaceMinecartGUI.FuelSlot.matches(stack);
 		};
 	}
-
 	public boolean canExtract(int slot, ItemStack stack, Direction dir) {
 		if (slot == 4) {
 			return true;
@@ -148,10 +129,8 @@ public abstract class FurnaceMinecartEntityMixin extends AbstractMinecartEntity 
 		if (!this.world.isClient && reason.shouldDestroy()) {
 			ItemScatterer.spawn(this.world, this, this);
 		}
-
 		super.remove(reason);
 	}
-
 
 	@Inject(method="writeCustomDataToNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
@@ -182,56 +161,8 @@ public abstract class FurnaceMinecartEntityMixin extends AbstractMinecartEntity 
 			OnARail.LOGGER.info("use chain on furnace minecart");
 		} else {
 			try {
-				SimpleGui gui = new SimpleGui(ScreenHandlerType.GENERIC_9X2, (ServerPlayerEntity) player, false) {
-					public boolean onClick(int index, ClickType type, SlotActionType action, GuiElementInterface element) {
-						this.player.sendMessage(Text.literal(type.toString()), false);
+				FurnaceMinecartGUI gui = new FurnaceMinecartGUI((ServerPlayerEntity) player, this);
 
-						return super.onClick(index, type, action, element);
-					}
-
-					@Override
-					public void onTick() {
-						super.onTick();
-						canPlayerUse(this.player);
-					}
-				};
-
-				// Connect GUI to inventory
-				gui.setSlotRedirect(3, new Slot(this, 0, 0, 0) {
-					public boolean canInsert(ItemStack stack) { return FuelRegistry.INSTANCE.get(stack.getItem()) != null; }
-				});
-				gui.setSlotRedirect(4, new Slot(this, 1, 0, 0){
-					public boolean canInsert(ItemStack stack) { return FuelRegistry.INSTANCE.get(stack.getItem()) != null; }
-				});
-				gui.setSlotRedirect(5, new Slot(this, 2, 0, 0){
-					public boolean canInsert(ItemStack stack) { return FuelRegistry.INSTANCE.get(stack.getItem()) != null; }
-				});
-				gui.setSlotRedirect(1, new Slot(this, 3, 0, 0) {
-					public boolean canInsert(ItemStack stack) { return stack.getItem() instanceof EnderPearlItem; }
-				});
-				gui.setSlotRedirect(7, new Slot(this, 4, 0, 0) {
-					public boolean canInsert(ItemStack stack) { return stack.getItem() instanceof BannerItem; }
-				});
-
-				// Static gui elements
-				gui.setSlot(0, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-				gui.setSlot(2, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-				gui.setSlot(6, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-				gui.setSlot(8, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-				gui.setSlot(9, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-				gui.setSlot(10, new GuiElementBuilder(Items.END_PORTAL_FRAME)
-						.setName(Text.translatable("container.onarail.furnace_minecart.chunk_fuel")));
-				gui.setSlot(11, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-				gui.setSlot(12, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-				gui.setSlot(13, new GuiElementBuilder(Items.FURNACE)	// should be set to this furnace minecart's type
-						.setName(Text.translatable("container.onarail.furnace_minecart.fuel")));
-				gui.setSlot(14, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-				gui.setSlot(15, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-				gui.setSlot(16, new GuiElementBuilder(Items.LOOM)
-						.setName(Text.translatable("container.onarail.furnace_minecart.pattern")));
-				gui.setSlot(17, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-
-				gui.setTitle(Text.translatable("entity.minecraft.furnace_minecart"));
 				gui.open();
 			} catch (Exception e) {
 				e.printStackTrace();

@@ -5,10 +5,25 @@ import eu.pb4.sgui.api.elements.GuiElementBuilder;
 import eu.pb4.sgui.api.elements.GuiElementInterface;
 import eu.pb4.sgui.api.gui.SimpleGui;
 import io.github.penguin_spy.onarail.OnARail;
+import net.fabricmc.fabric.api.registry.FuelRegistry;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.mob.PiglinBrain;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.entity.vehicle.FurnaceMinecartEntity;
+import net.minecraft.entity.vehicle.StorageMinecartEntity;
+import net.minecraft.entity.vehicle.StorageVehicle;
+import net.minecraft.inventory.Inventories;
+import net.minecraft.inventory.Inventory;
+import net.minecraft.inventory.SidedInventory;
 import net.minecraft.inventory.SimpleInventory;
+import net.minecraft.item.BannerItem;
+import net.minecraft.item.EnderPearlItem;
+import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
@@ -16,38 +31,155 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.ItemScatterer;
+import net.minecraft.util.collection.DefaultedList;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.GameRules;
+import net.minecraft.world.World;
+import org.checkerframework.checker.units.qual.A;
+import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(FurnaceMinecartEntity.class)
-public abstract class FurnaceMinecartEntityMixin {
+public abstract class FurnaceMinecartEntityMixin extends AbstractMinecartEntity implements SidedInventory {
+	private static final int[] EXTRACT_SLOTS = {4, 0, 1, 2}; // pattern, then 3x fuel slots (for fuel byproducts)
+	private static final int[] INSERT_SLOTS = {4, 0, 1, 2, 3}; // pattern, 3x fuel slots, chunk_fuel
+	private DefaultedList<ItemStack> inventory;
 
-	private SimpleInventory inventory;
-
-	//FIXME: this doesn't catch all constructors, only the one that runs on world load (placing a minecart during gameplay doesn't call this)
-	@Inject(method="<init>", at = @At("RETURN"))
-	void onConstructed(CallbackInfo ci) {
-		this.inventory = new SimpleInventory(5); // chunk_fuel, 3x fuel, pattern
+	// useless constructor bc mixins
+	protected FurnaceMinecartEntityMixin(EntityType<?> entityType, World world) {
+		super(entityType, world);
 	}
 
-	//TODO: serialize/deserialize inventory to nbt
+	@Inject(method="<init>*", at = @At("RETURN"))
+	void onConstructed(CallbackInfo ci) {
+		OnARail.LOGGER.info("Constructing FurnaceMinecartEntity");
+		this.inventory = DefaultedList.ofSize(5, ItemStack.EMPTY);	// chunk_fuel, 3x fuel, pattern
+	}
 
-	// This is an overwrite because the original functionality of interact()ing a furnace minecart is to consume coal/charcoal from the player's hand
-	//  and then "push" the furnace minecart, and that's it.
-	// None of that functionality is required by this mod; we are completely replacing it, so we just @Overwrite the interact method.
+	/* Inventory methods */
+	public int size() {
+		return this.inventory.size();
+	}
+	public boolean isEmpty() {
+		for(ItemStack stack : this.inventory) {
+			if(!stack.isEmpty()) return false;
+		}
+		return true;
+	}
+	public ItemStack getStack(int slot) {
+		return this.inventory.get(slot);
+	}
+	public ItemStack removeStack(int slot, int amount) {
+		return Inventories.splitStack(this.inventory, slot, amount);
+	}
+	public ItemStack removeStack(int slot) {
+		return Inventories.removeStack(this.inventory, slot);
+	}
+	public void setStack(int slot, ItemStack stack) {
+		this.inventory.set(slot, stack);
+		if (!stack.isEmpty() && stack.getCount() > this.getMaxCountPerStack()) {
+			stack.setCount(this.getMaxCountPerStack());
+		}
+	}
+	public void markDirty() {
+	}
+	public boolean canPlayerUse(PlayerEntity player) {
+		return !this.isRemoved() && this.getPos().isInRange(player.getPos(), 8.0);
+	}
+
+	/* SidedInventory methods */
+	public int[] getAvailableSlots(Direction side) {
+		if (side == Direction.DOWN) {
+			return EXTRACT_SLOTS;
+		} else {
+			return INSERT_SLOTS;
+		}
+	}
+
+	public boolean canInsert(int slot, ItemStack stack, @Nullable Direction dir) {
+		return switch (slot) {
+			case 3 -> // chunk_fuel
+				stack.getItem() instanceof EnderPearlItem;
+			case 4 -> // pattern
+				stack.getItem() instanceof BannerItem;
+			default -> // fuel slots
+				(FuelRegistry.INSTANCE.get(stack.getItem()) != null) && !(stack.getItem() instanceof BannerItem);
+		};
+	}
+
+	public boolean canExtract(int slot, ItemStack stack, Direction dir) {
+		if (slot == 4) {
+			return true;
+		} else if (dir == Direction.DOWN && (slot >= 0 && slot <= 2)) {
+			return stack.isOf(Items.BUCKET);
+		} else {
+			return false;
+		}
+	}
+
+	/* AbstractMinecartEntity methods */
+
+	// Drop items in inventory when destroyed
+	@Override
+	public void dropItems(DamageSource damageSource) {
+		OnARail.LOGGER.info("dropItems {}", damageSource.toString());
+		if (this.world.getGameRules().getBoolean(GameRules.DO_ENTITY_DROPS)) {
+			ItemScatterer.spawn(this.world, this, this);
+			if (!this.world.isClient) {
+				Entity attacker = damageSource.getSource();
+				if (attacker != null && attacker.getType() == EntityType.PLAYER) {
+					PiglinBrain.onGuardedBlockInteracted((PlayerEntity)attacker, true);
+				}
+			}
+		}
+		super.dropItems(damageSource);
+	}
+	// drop items when deleted by a creative mode player
+	@Override
+	public void remove(Entity.RemovalReason reason) {
+		if (!this.world.isClient && reason.shouldDestroy()) {
+			ItemScatterer.spawn(this.world, this, this);
+		}
+
+		super.remove(reason);
+	}
+
+
+	@Inject(method="writeCustomDataToNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
+	protected void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
+		Inventories.writeNbt(nbt, this.inventory);
+	}
+	@Inject(method="readCustomDataFromNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
+	protected void readCustomDataFromNbt(NbtCompound nbt, CallbackInfo ci) {
+		Inventories.readNbt(nbt, this.inventory);
+	}
+
+	/* FurnaceMinecartEntity methods */
+
+	/**
+	 * Handles right-clicking a furnace minecart (open GUI or start coupling).
+	 * @reason This is an overwrite because the original functionality of interact()ing a furnace minecart is to
+	 *  		consume coal/charcoal from the player's hand and then "push" the furnace minecart.<br>
+	 *  	    None of that functionality is required by this mod; we are completely replacing it, so we just @Overwrite the interact method.
+	 * @author Penguin_Spy
+	 */
 	@Overwrite
 	public ActionResult interact(PlayerEntity player, Hand hand) {
-		if(!(player instanceof ServerPlayerEntity)) {
-			return ActionResult.CONSUME;
+		if(!(player instanceof ServerPlayerEntity) || !canPlayerUse(player)) {
+			return ActionResult.SUCCESS;
 		}
 
 		if(player.getStackInHand(hand).isOf(Items.CHAIN)) {
 			// linking
 			OnARail.LOGGER.info("use chain on furnace minecart");
-			return ActionResult.CONSUME;
 		} else {
 			try {
 				SimpleGui gui = new SimpleGui(ScreenHandlerType.GENERIC_9X2, (ServerPlayerEntity) player, false) {
@@ -57,16 +189,29 @@ public abstract class FurnaceMinecartEntityMixin {
 						return super.onClick(index, type, action, element);
 					}
 
-					//TODO: onTick() checks if furnace minecart is still valid (still exists & is nearby in same dimension)
+					@Override
+					public void onTick() {
+						super.onTick();
+						canPlayerUse(this.player);
+					}
 				};
 
 				// Connect GUI to inventory
-				// TODO: filtering what items go in?
-				gui.setSlotRedirect(3, new Slot(inventory, 0, 0, 0));
-				gui.setSlotRedirect(4, new Slot(inventory, 1, 0, 0));
-				gui.setSlotRedirect(5, new Slot(inventory, 2, 0, 0));
-				gui.setSlotRedirect(1, new Slot(inventory, 3, 0, 0));
-				gui.setSlotRedirect(7, new Slot(inventory, 4, 0, 0));
+				gui.setSlotRedirect(3, new Slot(this, 0, 0, 0) {
+					public boolean canInsert(ItemStack stack) { return FuelRegistry.INSTANCE.get(stack.getItem()) != null; }
+				});
+				gui.setSlotRedirect(4, new Slot(this, 1, 0, 0){
+					public boolean canInsert(ItemStack stack) { return FuelRegistry.INSTANCE.get(stack.getItem()) != null; }
+				});
+				gui.setSlotRedirect(5, new Slot(this, 2, 0, 0){
+					public boolean canInsert(ItemStack stack) { return FuelRegistry.INSTANCE.get(stack.getItem()) != null; }
+				});
+				gui.setSlotRedirect(1, new Slot(this, 3, 0, 0) {
+					public boolean canInsert(ItemStack stack) { return stack.getItem() instanceof EnderPearlItem; }
+				});
+				gui.setSlotRedirect(7, new Slot(this, 4, 0, 0) {
+					public boolean canInsert(ItemStack stack) { return stack.getItem() instanceof BannerItem; }
+				});
 
 				// Static gui elements
 				gui.setSlot(0, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
@@ -91,7 +236,7 @@ public abstract class FurnaceMinecartEntityMixin {
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
-			return ActionResult.SUCCESS;
 		}
+		return ActionResult.CONSUME;
 	}
 }

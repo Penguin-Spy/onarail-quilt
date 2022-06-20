@@ -34,22 +34,24 @@ public class FurnaceMinecartGUI extends SimpleGui {
 		this.setSlotRedirect(7, new FurnaceMinecartGUI.PatternSlot(furnaceMinecart, 4));
 
 		// Static gui elements
-		this.setSlot(0, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-		this.setSlot(2, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-		this.setSlot(6, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-		this.setSlot(8, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-		this.setSlot(9, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
+		GuiElementBuilder background = new GuiElementBuilder(Items.WHITE_STAINED_GLASS_PANE)
+				.setName(Text.empty());
+		this.setSlot(0, background);
+		this.setSlot(2, background);
+		this.setSlot(6, background);
+		this.setSlot(8, background);
+		this.setSlot(9, background);
 		this.setSlot(10, new GuiElementBuilder(Items.END_PORTAL_FRAME)
 				.setName(Text.translatable("container.onarail.furnace_minecart.chunk_fuel")));
-		this.setSlot(11, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-		this.setSlot(12, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
+		this.setSlot(11, background);
+		this.setSlot(12, background);
 		this.setSlot(13, new GuiElementBuilder(Items.FURNACE)	// should be set to this furnace minecart's type
 				.setName(Text.translatable("container.onarail.furnace_minecart.fuel")));
-		this.setSlot(14, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
-		this.setSlot(15, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
+		this.setSlot(14, background);
+		this.setSlot(15, background);
 		this.setSlot(16, new GuiElementBuilder(Items.LOOM)
 				.setName(Text.translatable("container.onarail.furnace_minecart.pattern")));
-		this.setSlot(17, Items.WHITE_STAINED_GLASS_PANE.getDefaultStack());
+		this.setSlot(17, background);
 
 		this.setTitle(Text.translatable("entity.minecraft.furnace_minecart"));
 	}

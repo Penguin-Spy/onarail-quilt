@@ -6,7 +6,7 @@ quilt_loader = "0.17.0"
 
 quilted_fabric_api = "2.0.0-alpha.2+0.55.3-1.19"
 
-sgui = "1.1.0+1.19"
+sgui = "1.1.1+1.19"
 
 [libraries]
 minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }

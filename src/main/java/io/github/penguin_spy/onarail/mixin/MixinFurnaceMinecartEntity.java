@@ -1,5 +1,6 @@
 package io.github.penguin_spy.onarail.mixin;
 
+import io.github.penguin_spy.onarail.Linkable;
 import io.github.penguin_spy.onarail.OnARail;
 import io.github.penguin_spy.onarail.gui.FurnaceMinecartGUI;
 import net.minecraft.entity.Entity;
@@ -30,19 +31,19 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(FurnaceMinecartEntity.class)
-public abstract class FurnaceMinecartEntityMixin extends AbstractMinecartEntity implements SidedInventory {
+public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity implements SidedInventory, Linkable {
 	private static final int[] EXTRACT_SLOTS = {4, 0, 1, 2}; // pattern, then 3x fuel slots (for fuel byproducts)
 	private static final int[] INSERT_SLOTS = {4, 0, 1, 2, 3}; // pattern, 3x fuel slots, chunk_fuel
 	private DefaultedList<ItemStack> inventory;
 
+
 	// useless constructor bc mixins
-	protected FurnaceMinecartEntityMixin(EntityType<?> entityType, World world) {
+	protected MixinFurnaceMinecartEntity(EntityType<?> entityType, World world) {
 		super(entityType, world);
 	}
 
 	@Inject(method="<init>*", at = @At("RETURN"))
 	void onConstructed(CallbackInfo ci) {
-		OnARail.LOGGER.info("Constructing FurnaceMinecartEntity");
 		this.inventory = DefaultedList.ofSize(5, ItemStack.EMPTY);	// chunk_fuel, 3x fuel, pattern
 	}
 
@@ -78,7 +79,7 @@ public abstract class FurnaceMinecartEntityMixin extends AbstractMinecartEntity 
 	}
 	public boolean isValid(int slot, ItemStack stack) {
 		// slot 4 must be empty, all other slots don't care
-		return slot != 4 || this.inventory.get(slot).isEmpty();
+		return slot != 4 || this.inventory.get(4).isEmpty();
 	}
 
 	/* SidedInventory methods */
@@ -111,7 +112,6 @@ public abstract class FurnaceMinecartEntityMixin extends AbstractMinecartEntity 
 	// Drop items in inventory when destroyed
 	@Override
 	public void dropItems(DamageSource damageSource) {
-		OnARail.LOGGER.info("dropItems {}", damageSource.toString());
 		if (this.world.getGameRules().getBoolean(GameRules.DO_ENTITY_DROPS)) {
 			ItemScatterer.spawn(this.world, this, this);
 			if (!this.world.isClient) {
@@ -123,7 +123,7 @@ public abstract class FurnaceMinecartEntityMixin extends AbstractMinecartEntity 
 		}
 		super.dropItems(damageSource);
 	}
-	// drop items when deleted by a creative mode player
+	// drop inventory when deleted by a creative mode player
 	@Override
 	public void remove(Entity.RemovalReason reason) {
 		if (!this.world.isClient && reason.shouldDestroy()) {
@@ -151,17 +151,19 @@ public abstract class FurnaceMinecartEntityMixin extends AbstractMinecartEntity 
 	 * @author Penguin_Spy
 	 */
 	@Overwrite
-	public ActionResult interact(PlayerEntity player, Hand hand) {
-		if(!(player instanceof ServerPlayerEntity) || !canPlayerUse(player)) {
+	public ActionResult interact(PlayerEntity eitherPlayer, Hand hand) {
+		if(!(eitherPlayer instanceof ServerPlayerEntity player)) {
 			return ActionResult.SUCCESS;
+		} else if(!canPlayerUse(eitherPlayer)) {
+			return ActionResult.FAIL;
 		}
 
-		if(player.getStackInHand(hand).isOf(Items.CHAIN)) {
-			// linking
-			OnARail.LOGGER.info("use chain on furnace minecart");
+		ActionResult result = OnARail.tryLink(this, player, hand);
+		if(result != ActionResult.PASS) {
+			return result;
 		} else {
 			try {
-				FurnaceMinecartGUI gui = new FurnaceMinecartGUI((ServerPlayerEntity) player, this);
+				FurnaceMinecartGUI gui = new FurnaceMinecartGUI(player, this);
 
 				gui.open();
 			} catch (Exception e) {

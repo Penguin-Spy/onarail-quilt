@@ -1,10 +1,16 @@
 {
+    "setSourceFile": true,
 	"required": true,
 	"minVersion": "0.8",
 	"package": "io.github.penguin_spy.onarail.mixin",
 	"compatibilityLevel": "JAVA_17",
 	"mixins": [
-      "FurnaceMinecartEntityMixin"
+      "MixinAbstractMinecartEntity",
+      "MixinFurnaceMinecartEntity",
+      "MixinMinecartEntity",
+      "MixinStorageMinecartEntity",
+      "MixinCommandBlockMinecartEntity",
+      "MixinServerPlayerEntity"
     ],
 	"injectors": {
 		"defaultRequire": 1

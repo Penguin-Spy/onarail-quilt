@@ -1,31 +1,15 @@
 package io.github.penguin_spy.onarail;
 
-import com.mojang.authlib.GameProfile;
-import com.mojang.brigadier.context.CommandContext;
-import eu.pb4.sgui.api.ClickType;
-import eu.pb4.sgui.api.elements.*;
-import eu.pb4.sgui.api.gui.SimpleGui;
-import net.minecraft.enchantment.Enchantments;
-import net.minecraft.item.ItemStack;
+import net.minecraft.entity.vehicle.FurnaceMinecartEntity;
 import net.minecraft.item.Items;
-import net.minecraft.screen.ScreenHandlerType;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Style;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
 import org.quiltmc.loader.api.ModContainer;
 import org.quiltmc.qsl.base.api.entrypoint.ModInitializer;
-import org.quiltmc.qsl.command.api.CommandRegistrationCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.UUID;
-
-import static net.minecraft.server.command.CommandManager.literal;
-
 
 public class OnARail implements ModInitializer {
 	// This logger is used to write text to the console and the log file.
@@ -36,119 +20,73 @@ public class OnARail implements ModInitializer {
 	@Override
 	public void onInitialize(ModContainer mod) {
 		LOGGER.info("Hello Quilt world from {}!", mod.metadata().name());
-
-
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-			dispatcher.register(
-				literal("test").executes(OnARail::test)
-			);
-		});
 	}
 
+	/**
+	 * Attempts to start or finish coupling the specified minecart.<br>
+	 *
+	 * @param minecart	the minecart that was interacted with
+	 * @param player	the player who is trying to couple
+	 * @param hand		which hand was used to interact
+	 * @return			{@link ActionResult#SUCCESS} when coupling succeeded,<br>
+	 * 					{@link ActionResult#FAIL} when coupling failed,<br>
+	 * 					{@link ActionResult#PASS} when the player was not holding a chain.
+	 */
+	public static ActionResult tryLink(Linkable minecart, ServerPlayerEntity player, Hand hand) {
+		if(player.getStackInHand(hand).isOf(Items.CHAIN)) {
 
-	private static int test(CommandContext<ServerCommandSource> objectCommandContext) {
-		try {
-			ServerPlayerEntity player = objectCommandContext.getSource().getPlayer();
-			SimpleGui gui = new SimpleGui(ScreenHandlerType.GENERIC_3X3, player, false) {
-				@Override
-				public boolean onClick(int index, ClickType type, SlotActionType action, GuiElementInterface element) {
-					this.player.sendMessage(Text.literal(type.toString()), false);
-
-					return super.onClick(index, type, action, element);
-				}
-
-				@Override
-				public void onTick() {
-					this.setSlot(0, new GuiElementBuilder(Items.ARROW).setCount((int) (player.world.getTime() % 127)));
-					super.onTick();
-				}
-			};
-
-			gui.setTitle(Text.literal("Nice"));
-			gui.setSlot(0, new GuiElementBuilder(Items.ARROW).setCount(100));
-			gui.setSlot(1, new AnimatedGuiElement(new ItemStack[]{
-					Items.NETHERITE_PICKAXE.getDefaultStack(),
-					Items.DIAMOND_PICKAXE.getDefaultStack(),
-					Items.GOLDEN_PICKAXE.getDefaultStack(),
-					Items.IRON_PICKAXE.getDefaultStack(),
-					Items.STONE_PICKAXE.getDefaultStack(),
-					Items.WOODEN_PICKAXE.getDefaultStack()
-			}, 10, false, (x, y, z) -> {
-			}));
-
-			gui.setSlot(2, new AnimatedGuiElementBuilder()
-					.setItem(Items.NETHERITE_AXE).setDamage(150).saveItemStack()
-					.setItem(Items.DIAMOND_AXE).setDamage(150).unbreakable().saveItemStack()
-					.setItem(Items.GOLDEN_AXE).glow().saveItemStack()
-					.setItem(Items.IRON_AXE).enchant(Enchantments.AQUA_AFFINITY, 1).hideFlags().saveItemStack()
-					.setItem(Items.STONE_AXE).saveItemStack()
-					.setItem(Items.WOODEN_AXE).saveItemStack()
-					.setInterval(10).setRandom(true)
-			);
-
-			for (int x = 3; x < gui.getSize(); x++) {
-				ItemStack itemStack = Items.STONE.getDefaultStack();
-				itemStack.setCount(x);
-				gui.setSlot(x, new GuiElement(itemStack, (index, clickType, actionType) -> {
-				}));
+			if(player.isSneaking() && minecart.hasChild()) {
+				player.sendMessage(Text.translatable("onarail.link.unlinked", minecart.getChild().getName()), true);
+				minecart.removeChild();
+				return ActionResult.SUCCESS;
 			}
 
-			gui.setSlot(5, new GuiElementBuilder(Items.PLAYER_HEAD)
-					.setSkullOwner(
-							"ewogICJ0aW1lc3RhbXAiIDogMTYxOTk3MDIyMjQzOCwKICAicHJvZmlsZUlkIiA6ICI2OTBkMDM2OGM2NTE0OGM5ODZjMzEwN2FjMmRjNjFlYyIsCiAgInByb2ZpbGVOYW1lIiA6ICJ5emZyXzciLAogICJzaWduYXR1cmVSZXF1aXJlZCIgOiB0cnVlLAogICJ0ZXh0dXJlcyIgOiB7CiAgICAiU0tJTiIgOiB7CiAgICAgICJ1cmwiIDogImh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNDI0OGVhYTQxNGNjZjA1NmJhOTY5ZTdkODAxZmI2YTkyNzhkMGZlYWUxOGUyMTczNTZjYzhhOTQ2NTY0MzU1ZiIsCiAgICAgICJtZXRhZGF0YSIgOiB7CiAgICAgICAgIm1vZGVsIiA6ICJzbGltIgogICAgICB9CiAgICB9CiAgfQp9",
-							null, null)
-					.setName(Text.literal("Battery"))
-					.glow()
-			);
+			final Linker linker = ((Linker) player);
 
-			gui.setSlot(6, new GuiElementBuilder(Items.PLAYER_HEAD)
-					.setSkullOwner(new GameProfile(UUID.fromString("f5a216d9-d660-4996-8d0f-d49053677676"), "patbox"), player.server)
-					.setName(Text.literal("Patbox's Head"))
-					.glow()
-			);
+			if(!linker.isLinking()) {
+				// furnace minecarts start a train, other minecarts must be part of a train already to be coupled from
+				if(minecart.getParent() == null && !(minecart instanceof FurnaceMinecartEntity)) {
+					player.sendMessage(Text.translatable("onarail.link.cant_link_parent"), true);
+					linker.stopLinking();
+					return ActionResult.FAIL;
+				}
 
-			gui.setSlot(7, new GuiElementBuilder()
-					.setItem(Items.BARRIER)
-					.glow()
-					.setName(Text.literal("Bye")
-							.setStyle(Style.EMPTY.withItalic(false).withBold(true)))
-					.addLoreLine(Text.literal("Some lore"))
-					.addLoreLine(Text.literal("More lore").formatted(Formatting.RED))
-					.setCount(3)
-					.setCallback((index, clickType, actionType) -> gui.close())
-			);
+				// there can't be any minecarts coupled behind this one
+				if(minecart.getChild() != null) {
+					player.sendMessage(Text.translatable("onarail.link.already_linked_parent"), true);
+					linker.stopLinking();
+					return ActionResult.FAIL;
+				}
 
-			gui.setSlot(8, new GuiElementBuilder()
-					.setItem(Items.TNT)
-					.glow()
-					.setName(Text.literal("Test :)")
-							.setStyle(Style.EMPTY.withItalic(false).withBold(true)))
-					.addLoreLine(Text.literal("Some lore"))
-					.addLoreLine(Text.literal("More lore").formatted(Formatting.RED))
-					.setCount(1)
-					.setCallback((index, clickType, actionType) -> {
-						player.sendMessage(Text.literal("derg "), false);
-						ItemStack item = gui.getSlot(index).getItemStack();
-						if (clickType == ClickType.MOUSE_LEFT) {
-							item.setCount(item.getCount() == 1 ? item.getCount() : item.getCount() - 1);
-						} else if (clickType == ClickType.MOUSE_RIGHT) {
-							item.setCount(item.getCount() + 1);
-						}
-						((GuiElement) gui.getSlot(index)).setItemStack(item);
+				// if we got here, this minecart is valid to be coupled from
+				linker.setLinkingMinecart(minecart);
 
-						if (item.getCount() <= player.getEnderChestInventory().size()) {
-							gui.setSlotRedirect(4, new Slot(player.getEnderChestInventory(), item.getCount() - 1, 0, 0));
-						}
-					})
-			);
-			gui.setSlotRedirect(4, new Slot(player.getEnderChestInventory(), 0, 0, 0));
+			} else { // we're completing a couple
+				final Linkable parentMinecart = linker.getLinkingMinecart();
 
-			gui.open();
-		} catch (Exception e) {
-			e.printStackTrace();
+				if(minecart.getParent() != null) {
+					player.sendMessage(Text.translatable("onarail.link.already_linked_child"), true);
+					linker.stopLinking();
+					return ActionResult.FAIL;
+				}
+
+				if(minecart instanceof FurnaceMinecartEntity) {
+					player.sendMessage(Text.translatable("onarail.link.cant_link_child"), true);
+					linker.stopLinking();
+					return ActionResult.FAIL;
+				}
+
+				// if we got here, this minecart is valid to be coupled to
+				minecart.setParent(parentMinecart);	// link this to upstream cart
+				parentMinecart.setChild(minecart);	// link upstream cart to this
+				linker.stopLinking();
+
+				player.getStackInHand(hand).decrement(1);	// consume chain item
+				player.sendMessage(Text.translatable("onarail.link.linked",
+						parentMinecart.getName(), minecart.getName()), true);
+			}
+			return ActionResult.SUCCESS;
 		}
-		return 0;
+		return ActionResult.PASS;
 	}
-
-
 }

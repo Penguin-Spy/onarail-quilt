@@ -10,6 +10,7 @@ import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.world.World;
@@ -48,6 +49,15 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 
 	private void dropLinkItem() {
 		this.dropStack(Items.CHAIN.getDefaultStack(), 0.5F);
+		this.playLinkSound(false);
+	}
+
+	public void playLinkSound(boolean connecting) {
+		if(connecting) {
+			this.playSound(SoundEvents.BLOCK_CHAIN_PLACE);
+		} else {
+			this.playSound(SoundEvents.BLOCK_CHAIN_BREAK);
+		}
 	}
 
 	// this *might* in very rare, specific circumstances be able to be called recursively and cause a stack overflow

@@ -60,6 +60,7 @@ public class OnARail implements ModInitializer {
 
 				// if we got here, this minecart is valid to be coupled from
 				linker.setLinkingMinecart(minecart);
+				minecart.playLinkSound(true);
 
 			} else { // we're completing a couple
 				final Linkable parentMinecart = linker.getLinkingMinecart();
@@ -81,6 +82,7 @@ public class OnARail implements ModInitializer {
 				parentMinecart.setChild(minecart);	// link upstream cart to this
 				linker.stopLinking();
 
+				minecart.playLinkSound(true);
 				player.getStackInHand(hand).decrement(1);	// consume chain item
 				player.sendMessage(Text.translatable("onarail.link.linked",
 						parentMinecart.getName(), minecart.getName()), true);

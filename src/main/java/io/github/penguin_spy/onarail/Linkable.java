@@ -1,5 +1,6 @@
 package io.github.penguin_spy.onarail;
 
+import net.minecraft.sound.SoundEvent;
 import net.minecraft.text.Text;
 
 import java.util.UUID;
@@ -25,4 +26,5 @@ public interface Linkable {
 
 	Text getName();
 	UUID getUuid();
+	void playLinkSound(boolean connecting);
 }

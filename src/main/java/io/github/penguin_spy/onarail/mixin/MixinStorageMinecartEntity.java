@@ -1,7 +1,7 @@
 package io.github.penguin_spy.onarail.mixin;
 
 import io.github.penguin_spy.onarail.Linkable;
-import io.github.penguin_spy.onarail.OnARail;
+import io.github.penguin_spy.onarail.Util;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
@@ -24,7 +24,7 @@ public abstract class MixinStorageMinecartEntity extends AbstractMinecartEntity 
 	@Inject(method = "interact(Lnet/minecraft/entity/player/PlayerEntity;Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;", at = @At("HEAD"), cancellable = true)
 	public void interact(PlayerEntity eitherPlayer, Hand hand, CallbackInfoReturnable<ActionResult> cir) {
 		if(eitherPlayer instanceof ServerPlayerEntity player) {
-			ActionResult result = OnARail.tryLink(this, player, hand);
+			ActionResult result = Util.tryLink(this, player, hand);
 			if (result != ActionResult.PASS) {
 				cir.setReturnValue(result);
 			}

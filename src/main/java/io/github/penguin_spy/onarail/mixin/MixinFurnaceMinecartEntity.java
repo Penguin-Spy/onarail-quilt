@@ -1,8 +1,11 @@
 package io.github.penguin_spy.onarail.mixin;
 
 import io.github.penguin_spy.onarail.Linkable;
-import io.github.penguin_spy.onarail.OnARail;
+import io.github.penguin_spy.onarail.Util;
 import io.github.penguin_spy.onarail.gui.FurnaceMinecartGUI;
+import net.minecraft.block.AbstractRailBlock;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.enums.RailShape;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.damage.DamageSource;
@@ -16,16 +19,19 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.ItemScatterer;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameRules;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -35,6 +41,10 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	private static final int[] EXTRACT_SLOTS = {4, 0, 1, 2}; // pattern, then 3x fuel slots (for fuel byproducts)
 	private static final int[] INSERT_SLOTS = {4, 0, 1, 2, 3}; // pattern, 3x fuel slots, chunk_fuel
 	private DefaultedList<ItemStack> inventory;
+	private Direction travelDirection = Direction.NORTH;
+
+	@Shadow
+	private int fuel;
 
 
 	// useless constructor bc mixins
@@ -135,10 +145,19 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	@Inject(method="writeCustomDataToNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
 		Inventories.writeNbt(nbt, this.inventory);
+		//if(nbt.contains("onarail")) {
+			NbtCompound onARailNbt = nbt.getCompound("onarail");
+			onARailNbt.putInt("direction", this.travelDirection.getId());
+			nbt.put("onarail", onARailNbt);
+		//}
 	}
 	@Inject(method="readCustomDataFromNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void readCustomDataFromNbt(NbtCompound nbt, CallbackInfo ci) {
 		Inventories.readNbt(nbt, this.inventory);
+		if(nbt.contains("onarail")) {
+			NbtCompound onARailNbt = nbt.getCompound("onarail");
+			this.travelDirection = Direction.byId(onARailNbt.getInt("direction"));
+		}
 	}
 
 	/* FurnaceMinecartEntity methods */
@@ -158,7 +177,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 			return ActionResult.FAIL;
 		}
 
-		ActionResult result = OnARail.tryLink(this, player, hand);
+		ActionResult result = Util.tryLink(this, player, hand);
 		if(result != ActionResult.PASS) {
 			return result;
 		} else {
@@ -171,5 +190,27 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 			}
 		}
 		return ActionResult.CONSUME;
+	}
+
+	/**
+	 * Contrary to what the name suggests, this applies the acceleration in the direction of travel of this furnace minecart.
+	 * @reason Same deal here, don't need original functionality because it just dealt with pushX & pushY which we've replaced.
+	 * @author Penguin_Spy
+	 */
+	@Overwrite
+	public void applySlowdown() {
+		BlockState state = this.getBlockStateAtPos();
+		RailShape railShape = state.get(((AbstractRailBlock)state.getBlock()).getShapeProperty());
+
+		this.travelDirection = Util.alignDirWithRail(this.travelDirection, railShape);
+		this.setCustomName(Text.literal(this.travelDirection.toString()));
+
+		if(this.fuel > 0) {
+			Vec3d velocity = new Vec3d(travelDirection.getOffsetX(), travelDirection.getOffsetY(), travelDirection.getOffsetZ());
+			velocity.multiply(0.4);
+			this.setVelocity(velocity);
+		}
+
+		super.applySlowdown(); // handles water slowdown & friction
 	}
 }

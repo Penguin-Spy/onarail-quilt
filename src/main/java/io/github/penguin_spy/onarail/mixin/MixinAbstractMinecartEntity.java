@@ -1,7 +1,7 @@
 package io.github.penguin_spy.onarail.mixin;
 
 import io.github.penguin_spy.onarail.Linkable;
-import io.github.penguin_spy.onarail.OnARail;
+import io.github.penguin_spy.onarail.Util;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.player.PlayerEntity;
@@ -36,7 +36,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	@Override
 	public ActionResult interact(PlayerEntity eitherPlayer, Hand hand) {
 		if(eitherPlayer instanceof ServerPlayerEntity player) {
-			return OnARail.tryLink(this, player, hand);
+			return Util.tryLink(this, player, hand);
 		} else {
 			return ActionResult.PASS;
 		}
@@ -147,7 +147,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 
 	@Inject(method="writeCustomDataToNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
-		if(parentUuid != null || childUuid != null) {
+		//if(parentUuid != null || childUuid != null) {
 			NbtCompound onARailNbt = new NbtCompound();
 			if(parentUuid != null) {
 				onARailNbt.putUuid("parentUUID", parentUuid);
@@ -156,7 +156,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 				onARailNbt.putUuid("childUUID", childUuid);
 			}
 			nbt.put("onarail", onARailNbt);
-		}
+		//}
 	}
 	@Inject(method="readCustomDataFromNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void readCustomDataFromNbt(NbtCompound nbt, CallbackInfo ci) {

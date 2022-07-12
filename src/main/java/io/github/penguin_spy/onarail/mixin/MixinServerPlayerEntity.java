@@ -6,6 +6,7 @@ import io.github.penguin_spy.onarail.Linker;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Items;
 import net.minecraft.network.encryption.PlayerPublicKey;
+import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
@@ -24,8 +25,12 @@ public abstract class MixinServerPlayerEntity extends PlayerEntity implements Li
 
 	@Inject(method="playerTick()V", at = @At("HEAD"))
 	public void playerTick(CallbackInfo ci) {
-		if(this.linkingMinecart != null) {
-			if(!this.getMainHandStack().isOf(Items.CHAIN)) {
+		if(this.isLinking()) {
+			if(    this.linkingMinecart.isRemoved()
+				|| this.linkingMinecart.squaredDistanceTo(this.getEyePos()) > ServerPlayNetworkHandler.MAX_INTERACTION_DISTANCE
+				|| this.world != this.linkingMinecart.getWorld()
+				|| !this.getMainHandStack().isOf(Items.CHAIN)
+			) {
 				stopLinking();
 				this.sendMessage(Text.empty(), true);
 			} else {

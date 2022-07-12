@@ -7,6 +7,7 @@
   "text.onarail.link.cant_link_as_child": "This minecart can't be part of a train!",
   "text.onarail.link.already_linked_as_parent": "This minecart already has another minecart coupled to it!",
   "text.onarail.link.already_linked_as_child": "This minecart is already coupled to another minecart!",
+  "text.onarail.link.cant_link_too_far": "These minecarts are too far apart!",
 
   "text.onarail.link.start_link": "Coupling %s",
   "text.onarail.link.finish_link": "Coupled %s to %s",

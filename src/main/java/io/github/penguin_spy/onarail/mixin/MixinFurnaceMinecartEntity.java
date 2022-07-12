@@ -203,6 +203,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		RailShape railShape = state.get(((AbstractRailBlock)state.getBlock()).getShapeProperty());
 
 		this.travelDirection = Util.alignDirWithRail(this.travelDirection, railShape);
+		// debug!!
 		this.setCustomName(Text.literal(this.travelDirection.toString()));
 
 		if(this.fuel > 0) {

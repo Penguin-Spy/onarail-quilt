@@ -1,6 +1,7 @@
 package io.github.penguin_spy.onarail;
 
 import net.minecraft.block.enums.RailShape;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.vehicle.FurnaceMinecartEntity;
 import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -11,6 +12,9 @@ import net.minecraft.util.math.Direction;
 import static net.minecraft.util.math.Direction.*;
 
 public class Util {
+	public static int MINECART_LINK_RANGE = 3;
+
+
 	/**
 	 * Attempts to start or finish coupling the specified minecart.<br>
 	 *
@@ -54,6 +58,10 @@ public class Util {
 			} else { // we're completing a link
 				final Linkable parentMinecart = linker.getLinkingMinecart();
 
+				if(minecart == parentMinecart) { // if the player clicked on the same minecart twice, do nothing
+					return ActionResult.FAIL;
+				}
+
 				if(minecart.getParent() != null) {
 					player.sendMessage(Text.translatable("text.onarail.link.already_linked_as_child"), true);
 					linker.stopLinking();
@@ -62,6 +70,12 @@ public class Util {
 
 				if(minecart instanceof FurnaceMinecartEntity) {
 					player.sendMessage(Text.translatable("text.onarail.link.cant_link_as_child"), true);
+					linker.stopLinking();
+					return ActionResult.FAIL;
+				}
+
+				if(minecart.distanceTo((Entity) parentMinecart) > MINECART_LINK_RANGE) {
+					player.sendMessage(Text.translatable("text.onarail.link.cant_link_too_far"), true);
 					linker.stopLinking();
 					return ActionResult.FAIL;
 				}

@@ -25,24 +25,24 @@ public class Util {
 		if(player.getStackInHand(hand).isOf(Items.CHAIN)) {
 
 			if(player.isSneaking() && minecart.hasChild()) {
-				player.sendMessage(Text.translatable("onarail.link.unlinked", minecart.getChild().getName()), true);
+				player.sendMessage(Text.translatable("text.onarail.link.remove_link", minecart.getChild().getName()), true);
 				minecart.removeChild();
 				return ActionResult.SUCCESS;
 			}
 
 			final Linker linker = ((Linker) player);
 
-			if(!linker.isLinking()) {
+			if(!linker.isLinking()) { // we're staring a link
 				// furnace minecarts start a train, other minecarts must be part of a train already to be coupled from
 				if(minecart.getParent() == null && !(minecart instanceof FurnaceMinecartEntity)) {
-					player.sendMessage(Text.translatable("onarail.link.cant_link_parent"), true);
+					player.sendMessage(Text.translatable("text.onarail.link.cant_link_as_parent"), true);
 					linker.stopLinking();
 					return ActionResult.FAIL;
 				}
 
 				// there can't be any minecarts coupled behind this one
 				if(minecart.getChild() != null) {
-					player.sendMessage(Text.translatable("onarail.link.already_linked_parent"), true);
+					player.sendMessage(Text.translatable("text.onarail.link.already_linked_as_parent"), true);
 					linker.stopLinking();
 					return ActionResult.FAIL;
 				}
@@ -51,17 +51,17 @@ public class Util {
 				linker.setLinkingMinecart(minecart);
 				minecart.playLinkSound(true);
 
-			} else { // we're completing a couple
+			} else { // we're completing a link
 				final Linkable parentMinecart = linker.getLinkingMinecart();
 
 				if(minecart.getParent() != null) {
-					player.sendMessage(Text.translatable("onarail.link.already_linked_child"), true);
+					player.sendMessage(Text.translatable("text.onarail.link.already_linked_as_child"), true);
 					linker.stopLinking();
 					return ActionResult.FAIL;
 				}
 
 				if(minecart instanceof FurnaceMinecartEntity) {
-					player.sendMessage(Text.translatable("onarail.link.cant_link_child"), true);
+					player.sendMessage(Text.translatable("text.onarail.link.cant_link_as_child"), true);
 					linker.stopLinking();
 					return ActionResult.FAIL;
 				}
@@ -73,7 +73,7 @@ public class Util {
 
 				minecart.playLinkSound(true);
 				player.getStackInHand(hand).decrement(1);	// consume chain item
-				player.sendMessage(Text.translatable("onarail.link.linked",
+				player.sendMessage(Text.translatable("text.onarail.link.finish_link",
 						parentMinecart.getName(), minecart.getName()), true);
 			}
 			return ActionResult.SUCCESS;

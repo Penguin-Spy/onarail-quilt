@@ -29,7 +29,7 @@ public abstract class MixinServerPlayerEntity extends PlayerEntity implements Li
 				stopLinking();
 				this.sendMessage(Text.empty(), true);
 			} else {
-				this.sendMessage(Text.translatable("onarail.link.linking", linkingMinecartName), true);
+				this.sendMessage(Text.translatable("text.onarail.link.start_link", linkingMinecartName), true);
 			}
 		}
 	}

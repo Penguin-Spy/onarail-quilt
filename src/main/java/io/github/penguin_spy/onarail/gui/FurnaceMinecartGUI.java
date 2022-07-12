@@ -42,15 +42,15 @@ public class FurnaceMinecartGUI extends SimpleGui {
 		this.setSlot(8, background);
 		this.setSlot(9, background);
 		this.setSlot(10, new GuiElementBuilder(Items.END_PORTAL_FRAME)
-				.setName(Text.translatable("container.onarail.furnace_minecart.chunk_fuel")));
+				.setName(Text.translatable("text.onarail.furnace_minecart.chunk_fuel")));
 		this.setSlot(11, background);
 		this.setSlot(12, background);
 		this.setSlot(13, new GuiElementBuilder(Items.FURNACE)	// should be set to this furnace minecart's type
-				.setName(Text.translatable("container.onarail.furnace_minecart.fuel")));
+				.setName(Text.translatable("text.onarail.furnace_minecart.fuel")));
 		this.setSlot(14, background);
 		this.setSlot(15, background);
 		this.setSlot(16, new GuiElementBuilder(Items.LOOM)
-				.setName(Text.translatable("container.onarail.furnace_minecart.pattern")));
+				.setName(Text.translatable("text.onarail.furnace_minecart.pattern")));
 		this.setSlot(17, background);
 
 		this.setTitle(Text.translatable("entity.minecraft.furnace_minecart"));

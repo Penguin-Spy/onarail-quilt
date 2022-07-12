@@ -1,12 +1,13 @@
 [versions]
 # The latest versions are available at https://lambdaurora.dev/tools/import_quilt.html
 minecraft = "1.19"
-quilt_mappings = "1.19+build.1"
-quilt_loader = "0.17.0"
+quilt_mappings = "1"
+quilt_loader = "0.17.1-beta.6" # 0.17.0
 
-quilted_fabric_api = "2.0.0-alpha.2+0.55.3-1.19"
+quilted_fabric_api = "2.0.0-beta.5+0.57.0-1.19"
 
 sgui = "1.1.1+1.19"
+translations = "1.4.16+1.19"
 
 [libraries]
 minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }
@@ -17,6 +18,7 @@ quilted_fabric_api = { module = "org.quiltmc.quilted-fabric-api:quilted-fabric-a
 quilted_fabric_api_deprecated = { module = "org.quiltmc.quilted-fabric-api:quilted-fabric-api-deprecated", version.ref = "quilted_fabric_api" }
 
 sgui = { module = "eu.pb4:sgui", version.ref = "sgui"}
+translations = { module = "fr.catcore:server-translations-api", version.ref = "translations" }
 
 # If you have multiple similar dependencies, you can declare a dependency bundle and reference it on the build script with "libs.bundles.example".
 [bundles]

@@ -38,7 +38,7 @@ public class Util {
 
 			if(!linker.isLinking()) { // we're staring a link
 				// furnace minecarts start a train, other minecarts must be part of a train already to be coupled from
-				if(minecart.getParent() == null && !(minecart instanceof FurnaceMinecartEntity)) {
+				if(minecart.getParent() == null && !minecart.isFurnace()) {
 					player.sendMessage(Text.translatable("text.onarail.link.cant_link_as_parent"), true);
 					linker.stopLinking();
 					return ActionResult.FAIL;
@@ -68,7 +68,7 @@ public class Util {
 					return ActionResult.FAIL;
 				}
 
-				if(minecart instanceof FurnaceMinecartEntity) {
+				if(minecart.isFurnace()) {
 					player.sendMessage(Text.translatable("text.onarail.link.cant_link_as_child"), true);
 					linker.stopLinking();
 					return ActionResult.FAIL;

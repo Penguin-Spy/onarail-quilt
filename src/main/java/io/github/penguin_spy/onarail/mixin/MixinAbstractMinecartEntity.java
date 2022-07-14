@@ -2,6 +2,9 @@ package io.github.penguin_spy.onarail.mixin;
 
 import io.github.penguin_spy.onarail.Linkable;
 import io.github.penguin_spy.onarail.Util;
+import net.minecraft.block.AbstractRailBlock;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.enums.RailShape;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.player.PlayerEntity;
@@ -11,14 +14,18 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.UUID;
 
@@ -32,6 +39,10 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	private UUID parentUuid;
 	private Linkable childMinecart;
 	private UUID childUuid;
+
+	private Direction travelDirection = Direction.NORTH;
+
+	private double velocityMultiplier = 0;
 
 	@Override
 	public ActionResult interact(PlayerEntity eitherPlayer, Hand hand) {
@@ -60,6 +71,14 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		}
 	}
 
+	// todo: check if this this is laggy/inefficient
+	//  passing the call up the train for every minecart every tick might be a bit much,
+	//  but my only reference point is datapacks, idk how efficient Java is
+	// an alternative implementation would be to get the locomotive minecart once (via chained getLocomotive()s )
+	//  and then directly reference that each call (don't need to serialize tho, can just obtain & re-cache it when necessary)
+	public boolean isPowered() {
+		return this.parentMinecart != null && parentMinecart.isPowered();
+	}
 	// this *might* in very rare, specific circumstances be able to be called recursively and cause a stack overflow
 	// but it shouldn't because after being called once on a minecart all subsequent calls should do nothing.
 	private void validateLinks() {
@@ -155,6 +174,8 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			if(childUuid != null) {
 				onARailNbt.putUuid("childUUID", childUuid);
 			}
+			onARailNbt.putInt("direction", travelDirection.getId());
+			onARailNbt.putDouble("velocityMultiplier", velocityMultiplier);
 			nbt.put("onarail", onARailNbt);
 		//}
 	}
@@ -168,6 +189,12 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			if(onARailNbt.contains("childUUID")) {
 				childUuid = onARailNbt.getUuid("childUUID");
 			}
+			if(onARailNbt.contains("direction")) {
+				travelDirection = Direction.byId(onARailNbt.getInt("direction"));
+			}
+			if(onARailNbt.contains("velocityMultiplier")) {
+				velocityMultiplier = onARailNbt.getDouble("velocityMultiplier");
+			}
 		}
 	}
 
@@ -175,4 +202,56 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	public void tick(CallbackInfo ci) {
 		validateLinks();
 	}
+
+	@Inject(method = "applySlowdown()V", at = @At("HEAD"))
+	protected void applySlowdown(CallbackInfo ci) {
+		BlockState state = this.getBlockStateAtPos();
+
+		if (AbstractRailBlock.isRail(state)) {
+			RailShape railShape = state.get(((AbstractRailBlock)state.getBlock()).getShapeProperty());
+			travelDirection = Util.alignDirWithRail(travelDirection, railShape);
+			// debug!!
+			//this.setCustomName(Text.literal(this.travelDirection.toString()));
+
+			if(this.isPowered()) {
+				if(this.isFurnace()) {
+					double dynamicVelocityMultiplier = 0.4;
+					if(this.velocityMultiplier > 0) {
+						dynamicVelocityMultiplier = this.velocityMultiplier;
+					}
+					this.setVelocity(
+						Vec3d.of(travelDirection.getVector())
+						.multiply(dynamicVelocityMultiplier)
+					);
+				} else {
+					float distToParent = this.getParent().distanceTo(this);
+					// debug!!
+					this.setCustomName(Text.literal(String.format("%.2f", distToParent)));
+
+					double dynamicVelocityMultiplier = 0.4;
+					if(this.velocityMultiplier > 0) {
+						dynamicVelocityMultiplier = this.velocityMultiplier;
+					} else {
+						if (distToParent > Util.MINECART_LINK_RANGE) {
+							parentMinecart.removeChild();
+						} else if (distToParent > 1.65) {
+							dynamicVelocityMultiplier = 0.45;
+						} else if (distToParent < 1.6) {
+							dynamicVelocityMultiplier = 0.35;
+						}
+					}
+
+					this.setVelocity(
+						Vec3d.of(travelDirection.getVector())
+						.multiply(dynamicVelocityMultiplier)
+					);
+				}
+			}
+		}
+	}
+
+	/*@Inject(method = "moveOnRail(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState)V", at = @At("TAIL"))
+	protected void moveOnRail(BlockPos pos, BlockState state, CallbackInfo ci) {
+
+	}*/
 }

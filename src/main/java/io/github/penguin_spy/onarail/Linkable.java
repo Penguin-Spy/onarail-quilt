@@ -24,6 +24,12 @@ public interface Linkable {
 	void removeChild();
 	boolean isChildUuid(UUID childUuid);
 
+	void playLinkSound(boolean connecting);
+	boolean isPowered();
+	default boolean isFurnace() {
+		return false;
+	}
+
 	boolean isRemoved();
 	float distanceTo(Entity entity);
 	double squaredDistanceTo(Vec3d vector);
@@ -31,5 +37,4 @@ public interface Linkable {
 
 	Text getName();
 	UUID getUuid();
-	void playLinkSound(boolean connecting);
 }

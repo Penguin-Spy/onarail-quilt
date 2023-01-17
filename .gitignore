@@ -28,3 +28,8 @@ workspace/
 
 # macOS
 *.DS_Store
+
+
+/src/test/
+desktop.ini
+plant.txt

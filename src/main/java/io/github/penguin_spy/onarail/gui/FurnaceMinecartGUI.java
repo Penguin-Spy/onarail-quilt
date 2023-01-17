@@ -4,7 +4,6 @@ import eu.pb4.sgui.api.ClickType;
 import eu.pb4.sgui.api.elements.GuiElementBuilder;
 import eu.pb4.sgui.api.elements.GuiElementInterface;
 import eu.pb4.sgui.api.gui.SimpleGui;
-import net.fabricmc.fabric.api.registry.FuelRegistry;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.*;
 import net.minecraft.screen.ScreenHandlerType;
@@ -12,6 +11,7 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import org.quiltmc.qsl.item.content.registry.api.ItemContentRegistries;
 
 public class FurnaceMinecartGUI extends SimpleGui {
 	private final Inventory furnaceMinecart;
@@ -81,7 +81,8 @@ public class FurnaceMinecartGUI extends SimpleGui {
 
 		public static boolean matches(ItemStack stack) {
 			Item item = stack.getItem();
-			return (FuelRegistry.INSTANCE.get(item) != null) && !(item instanceof BannerItem);
+			return ItemContentRegistries.FUEL_TIMES.get(item).isPresent()
+					&& !PatternSlot.matches(stack);
 		}
 	}
 

@@ -32,9 +32,12 @@ public abstract class MixinStorageMinecartEntity extends MixinAbstractMinecartEn
 		}
 	}
 
-	@Inject(method = "applySlowdown()V", at = @At("HEAD"))
+	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
 	protected void applySlowdown(CallbackInfo ci) {
-		// if we're not in a train, don't modify behavior
-		if(parentMinecart != null) applyAcceleration();
+		// only modify behavior if we're part of a train
+		if(parentMinecart != null) {
+			applyAcceleration();
+			ci.cancel();
+		}
 	}
 }

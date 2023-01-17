@@ -41,8 +41,6 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	private static final int[] INSERT_SLOTS = {4, 0, 1, 2, 3}; // pattern, 3x fuel slots, chunk_fuel
 	private DefaultedList<ItemStack> inventory;
 
-	//private boolean isStopped = false; // held in place by activator rail or stuck on a block
-
 	@Shadow
 	private int fuel;
 
@@ -142,36 +140,20 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		super.remove(reason);
 	}
 
-	/*@Override
-	public void onActivatorRail(int x, int y, int z, boolean powered) {
-		this.isStopped = powered;
-	}*/
-
 	@Inject(method="writeCustomDataToNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
 		Inventories.writeNbt(nbt, this.inventory);
-		/*
-		//if(nbt.contains("onarail")) {
-			NbtCompound onARailNbt = nbt.getCompound("onarail");
-			onARailNbt.putInt("direction", this.travelDirection.getId());
-			nbt.put("onarail", onARailNbt);
-		//}
-		*/
 	}
 	@Inject(method="readCustomDataFromNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void readCustomDataFromNbt(NbtCompound nbt, CallbackInfo ci) {
 		Inventories.readNbt(nbt, this.inventory);
-		/*if(nbt.contains("onarail")) {
-			NbtCompound onARailNbt = nbt.getCompound("onarail");
-			this.travelDirection = Direction.byId(onARailNbt.getInt("direction"));
-		}*/
 	}
 
 	/* FurnaceMinecartEntity methods */
 
 	/**
 	 * Handles right-clicking a furnace minecart (open GUI or start coupling).
-	 * @reason This is an overwrite because the original functionality of interact()ing a furnace minecart is to
+	 * @reason This is an @overwrite because the original functionality of interact()ing a furnace minecart is to
 	 *  		consume coal/charcoal from the player's hand and then "push" the furnace minecart.<br>
 	 *  	    None of that functionality is required by this mod; we are completely replacing it, so we just @Overwrite the interact method.
 	 * @author Penguin_Spy
@@ -202,11 +184,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	// ignore default behavior of furnace minecart's applySlowdown (normally handles acceleration, we do that in AbstractMinecartEntity instead)
 	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
 	public void applySlowdown(CallbackInfo ci) {
-		/*if(this.isStopped) {
-			this.setVelocity(Vec3d.ZERO);
-		} else {*/
-			super.applySlowdown(); // handles water slowdown & friction
-		//}
+		super.applySlowdown(); // handles water slowdown & friction
 		ci.cancel();
 	}
 

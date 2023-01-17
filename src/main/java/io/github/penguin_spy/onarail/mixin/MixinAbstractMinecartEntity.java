@@ -1,12 +1,16 @@
 package io.github.penguin_spy.onarail.mixin;
 
+import com.mojang.datafixers.util.Pair;
 import io.github.penguin_spy.onarail.Linkable;
 import io.github.penguin_spy.onarail.Util;
 import net.minecraft.block.AbstractRailBlock;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.block.PoweredRailBlock;
 import net.minecraft.block.enums.RailShape;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.MovementType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.entity.vehicle.StorageMinecartEntity;
@@ -18,12 +22,12 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.*;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Overwrite;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -31,6 +35,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 import java.util.UUID;
+
 
 @Mixin(AbstractMinecartEntity.class)
 public abstract class MixinAbstractMinecartEntity extends Entity implements Linkable {
@@ -206,8 +211,8 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		validateLinks();
 	}
 
-	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
-	protected void applySlowdown(CallbackInfo ci) {
+	/*@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
+	protected void applySlowdownMixin(CallbackInfo ci) {
 		// if we're not in a train, don't modify behavior
 		if(this.parentMinecart != null || this.isFurnace()) {
 			applyAcceleration();
@@ -222,14 +227,205 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			// and then return from applySlowdown without running the original logic
 			ci.cancel();
 		//}
-	}
+	}*/
 
-	@Inject(method = "moveOnRail(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V",
+	/*@Inject(method = "moveOnRail(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V",
 			at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/vehicle/AbstractMinecartEntity;getMaxOffRailSpeed()D", shift = At.Shift.AFTER),
 			locals = LocalCapture.CAPTURE_FAILHARD)
 	private double moveOnRail_ignorePassengers(BlockPos pos, BlockState state, CallbackInfo ci, double t) {
 		t = 1;
 		return t;
+	}*/
+
+	@Shadow
+	private static Pair<Vec3i, Vec3i> getAdjacentRailPositionsByShape(RailShape railShape) { return new Pair<>(Vec3i.ZERO, Vec3i.ZERO); }
+	@Shadow
+	private void applySlowdown() {}
+	@Shadow
+	protected double getMaxOffRailSpeed() { return 0.0; }
+	@Shadow
+	private Vec3d snapPositionToRail(double d, double e, double f) { return null; }
+	@Shadow
+	private boolean willHitBlockAt(BlockPos pos) { return false; }
+
+
+	@Overwrite
+	public void moveOnRail(BlockPos pos, BlockState state) {
+		this.resetFallDistance();
+		double x = this.getX();		// d
+		double y = this.getY();		// e
+		double z = this.getZ();		// f
+		Vec3d startingPosOnRail = this.snapPositionToRail(x, y, z);
+		y = pos.getY();
+
+		// set up boost booleans & check for powered rails
+		boolean isBoostedByRail = false;	// bl
+		boolean shouldBrake = false;		// bl2
+		if (state.isOf(Blocks.POWERED_RAIL)) {
+			isBoostedByRail = state.get(PoweredRailBlock.POWERED);
+			shouldBrake = !isBoostedByRail;
+		}
+
+		// push minecarts down ascending rails
+		double ascendingRailForce = 0.0078125;	// g
+		if (this.isTouchingWater()) {
+			ascendingRailForce *= 0.2;
+		}
+
+		Vec3d ourVelocity = this.getVelocity();
+		RailShape railShape = state.get(((AbstractRailBlock)state.getBlock()).getShapeProperty());
+		//noinspection EnhancedSwitchMigration
+		switch (railShape) {
+			case ASCENDING_EAST:
+				this.setVelocity(ourVelocity.add(-ascendingRailForce, 0.0, 0.0));
+				++y;
+				break;
+			case ASCENDING_WEST:
+				this.setVelocity(ourVelocity.add(ascendingRailForce, 0.0, 0.0));
+				++y;
+				break;
+			case ASCENDING_NORTH:
+				this.setVelocity(ourVelocity.add(0.0, 0.0, ascendingRailForce));
+				++y;
+				break;
+			case ASCENDING_SOUTH:
+				this.setVelocity(ourVelocity.add(0.0, 0.0, -ascendingRailForce));
+				++y;
+		}
+
+		// something to do with x/z directions to adjacent rails
+		ourVelocity = this.getVelocity();
+		Pair<Vec3i, Vec3i> pair = getAdjacentRailPositionsByShape(railShape);
+		Vec3i firstAdjacentRail = pair.getFirst();
+		Vec3i secondAdjacentRail = pair.getSecond();
+		double dx = (secondAdjacentRail.getX() - firstAdjacentRail.getX());		// h
+		double dz = (secondAdjacentRail.getZ() - firstAdjacentRail.getZ());		// i
+		double d = Math.sqrt(dx * dx + dz * dz);										// j
+		double k = ourVelocity.x * dx + ourVelocity.z * dz;
+		if (k < 0.0) {
+			dx = -dx;
+			dz = -dz;
+		}
+
+		// i think this is adjusting our velocity to point along the line between the 2 adjacent rails
+		double l = Math.min(2.0, ourVelocity.horizontalLength());
+		ourVelocity = new Vec3d(l * dx / d, ourVelocity.y, l * dz / d);
+		this.setVelocity(ourVelocity);
+
+		// riding player driving the cart they're riding
+		Entity entity = this.getFirstPassenger();
+		if (entity instanceof PlayerEntity) {
+			Vec3d ridingPlayerVelocity = entity.getVelocity();
+			double playerVelocityLength = ridingPlayerVelocity.horizontalLengthSquared();
+			double ourVelocityLength = this.getVelocity().horizontalLengthSquared();
+			if (playerVelocityLength > 1.0E-4 && ourVelocityLength < 0.01) {
+				this.setVelocity(this.getVelocity().add(ridingPlayerVelocity.x * 0.1, 0.0, ridingPlayerVelocity.z * 0.1));
+				shouldBrake = false;
+			}
+		}
+
+		// if we're on an unpowered golden rail (and not being driven by a player), slow down very fast (as fast as if we were derailed)
+		if (shouldBrake) {
+			double ourVelocityLength = this.getVelocity().horizontalLength();
+			if (ourVelocityLength < 0.03) {
+				this.setVelocity(Vec3d.ZERO);
+			} else {
+				this.setVelocity(this.getVelocity().multiply(0.5, 0.0, 0.5));
+			}
+		}
+
+		// no idea yet but idc (gets/sets position to match rail between adjacent rail positions)
+		double o = (double)pos.getX() + 0.5 + (double)firstAdjacentRail.getX() * 0.5;
+		double p = (double)pos.getZ() + 0.5 + (double)firstAdjacentRail.getZ() * 0.5;
+		double q = (double)pos.getX() + 0.5 + (double)secondAdjacentRail.getX() * 0.5;
+		double r = (double)pos.getZ() + 0.5 + (double)secondAdjacentRail.getZ() * 0.5;
+		double h2 = q - o;
+		double i2 = r - p;
+		double s;
+		double t;
+		double u;
+		if (h2 == 0.0) {
+			s = z - (double)pos.getZ();
+		} else if (i2 == 0.0) {
+			s = x - (double)pos.getX();
+		} else {
+			t = x - o;
+			u = z - p;
+			s = (t * h2 + u * i2) * 2.0;
+		}
+		x = o + h2 * s;
+		z = p + i2 * s;
+		this.setPosition(x, y, z);
+
+		// apply movement velocity & position
+		double passengerVelocityMultiplier = this.hasPassengers() ? 0.75 : 1.0;  // minecarts with passengers move slower (but have higher momentum/lose speed slower as per this.applySlowdown() )
+		double maxSpeed = this.getMaxOffRailSpeed();
+		ourVelocity = this.getVelocity();
+		this.move(MovementType.SELF, new Vec3d(MathHelper.clamp(passengerVelocityMultiplier * ourVelocity.x, -maxSpeed, maxSpeed), 0.0, MathHelper.clamp(passengerVelocityMultiplier * ourVelocity.z, -maxSpeed, maxSpeed)));
+		// snaps minecart Y to adjacent rail position if we're in the position of said adjacent rail
+		if (firstAdjacentRail.getY() != 0 && MathHelper.floor(this.getX()) - pos.getX() == firstAdjacentRail.getX() && MathHelper.floor(this.getZ()) - pos.getZ() == firstAdjacentRail.getZ()) {
+			this.setPosition(this.getX(), this.getY() + (double)firstAdjacentRail.getY(), this.getZ());
+		} else if (secondAdjacentRail.getY() != 0 && MathHelper.floor(this.getX()) - pos.getX() == secondAdjacentRail.getX() && MathHelper.floor(this.getZ()) - pos.getZ() == secondAdjacentRail.getZ()) {
+			this.setPosition(this.getX(), this.getY() + (double)secondAdjacentRail.getY(), this.getZ());
+		}
+
+		this.applySlowdown();    // separate call so that subclasses can override with their respective behavior (and then we undo that :troll:
+
+		// scale X/Z velocity when there is a change in Y block pos
+		Vec3d adjustedPosOnRail = this.snapPositionToRail(this.getX(), this.getY(), this.getZ());
+		if (adjustedPosOnRail != null && startingPosOnRail != null) {
+			double dy = (startingPosOnRail.y - adjustedPosOnRail.y) * 0.05;
+			ourVelocity = this.getVelocity();
+			double ourVelocityLength = ourVelocity.horizontalLength();
+			if (ourVelocityLength > 0.0) {
+				this.setVelocity(ourVelocity.multiply((ourVelocityLength + dy) / ourVelocityLength, 1.0, (ourVelocityLength + dy) / ourVelocityLength));
+			}
+
+			this.setPosition(this.getX(), adjustedPosOnRail.y, this.getZ());
+		}
+
+		// scale X/Z velocity when there is a change in X or Z block pos
+		int floorX = MathHelper.floor(this.getX());
+		int floorY = MathHelper.floor(this.getZ());
+		if (floorX != pos.getX() || floorY != pos.getZ()) {
+			ourVelocity = this.getVelocity();
+			double ourVelocityLength = ourVelocity.horizontalLength();
+			this.setVelocity(ourVelocityLength * (double)(floorX - pos.getX()), ourVelocity.y, ourVelocityLength * (double)(floorY - pos.getZ()));
+		}
+
+		// do powered_rail stuff
+		if (isBoostedByRail) {
+			ourVelocity = this.getVelocity();
+			double ourVelocityLength = ourVelocity.horizontalLength();
+			if (ourVelocityLength > 0.01) {
+				// reduce X/Z velocity
+				this.setVelocity(ourVelocity.add(ourVelocity.x / ourVelocityLength * 0.06, 0.0, ourVelocity.z / ourVelocityLength * 0.06));
+			} else {
+				ourVelocity = this.getVelocity();
+				double xVel = ourVelocity.x;
+				double zVel = ourVelocity.z;
+				if (railShape == RailShape.EAST_WEST) {	// positive X is east
+					if (this.willHitBlockAt(pos.west())) { // bounce away with velocity (on powered rail)
+						xVel = 0.02;
+					} else if (this.willHitBlockAt(pos.east())) {
+						xVel = -0.02;
+					}
+				} else {
+					if (railShape != RailShape.NORTH_SOUTH) {
+						return;
+					}
+
+					if (this.willHitBlockAt(pos.north())) {	// bounce away with velocity (on powered rail)
+						zVel = 0.02;
+					} else if (this.willHitBlockAt(pos.south())) {
+						zVel = -0.02;
+					}
+				}
+
+				this.setVelocity(xVel, ourVelocity.y, zVel);
+			}
+		}
+
 	}
 
 	protected void applyAcceleration() {

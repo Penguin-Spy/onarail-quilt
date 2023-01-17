@@ -3,6 +3,9 @@ package io.github.penguin_spy.onarail.mixin;
 import io.github.penguin_spy.onarail.Linkable;
 import io.github.penguin_spy.onarail.Util;
 import io.github.penguin_spy.onarail.gui.FurnaceMinecartGUI;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.block.PoweredRailBlock;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.damage.DamageSource;
@@ -21,7 +24,6 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.ItemScatterer;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameRules;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
@@ -39,7 +41,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	private static final int[] INSERT_SLOTS = {4, 0, 1, 2, 3}; // pattern, 3x fuel slots, chunk_fuel
 	private DefaultedList<ItemStack> inventory;
 
-	private boolean isStopped = false; // held in place by activator rail or stuck on a block
+	//private boolean isStopped = false; // held in place by activator rail or stuck on a block
 
 	@Shadow
 	private int fuel;
@@ -140,10 +142,10 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		super.remove(reason);
 	}
 
-	@Override
+	/*@Override
 	public void onActivatorRail(int x, int y, int z, boolean powered) {
 		this.isStopped = powered;
-	}
+	}*/
 
 	@Inject(method="writeCustomDataToNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
@@ -200,11 +202,11 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	// ignore default behavior of furnace minecart's applySlowdown (normally handles acceleration, we do that in AbstractMinecartEntity instead)
 	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
 	public void applySlowdown(CallbackInfo ci) {
-		if(this.isStopped) {
+		/*if(this.isStopped) {
 			this.setVelocity(Vec3d.ZERO);
-		} else {
+		} else {*/
 			super.applySlowdown(); // handles water slowdown & friction
-		}
+		//}
 		ci.cancel();
 	}
 
@@ -215,11 +217,18 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	}
 
 
+	public boolean isStoppedByActivatorRail() {
+		BlockState state = this.world.getBlockState(this.getBlockPos());
+		if(state.isOf(Blocks.ACTIVATOR_RAIL)) {
+			return state.get(PoweredRailBlock.POWERED);
+		}
+		return false;
+	}
 
 	/* Linkable methods */
-	@Override
+	@Override // overrides the implementation in MixinAbstractFurnaceMinecart (the IDE doesn't know that, but that's what this is doing when mixed in)
 	public boolean isPowered() {
-		return this.fuel > 0;
+		return this.fuel > 0 && !isStoppedByActivatorRail();
 	}
 
 	public boolean isFurnace() {

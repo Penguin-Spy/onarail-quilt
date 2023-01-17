@@ -13,10 +13,11 @@ import net.minecraft.world.World;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(StorageMinecartEntity.class)
-public abstract class MixinStorageMinecartEntity extends AbstractMinecartEntity implements Linkable {
+public abstract class MixinStorageMinecartEntity extends MixinAbstractMinecartEntity implements Linkable {
 	protected MixinStorageMinecartEntity(EntityType<?> entityType, World world) {
 		super(entityType, world);
 	}
@@ -29,5 +30,11 @@ public abstract class MixinStorageMinecartEntity extends AbstractMinecartEntity 
 				cir.setReturnValue(result);
 			}
 		}
+	}
+
+	@Inject(method = "applySlowdown()V", at = @At("HEAD"))
+	protected void applySlowdown(CallbackInfo ci) {
+		// if we're not in a train, don't modify behavior
+		if(parentMinecart != null) applyAcceleration();
 	}
 }

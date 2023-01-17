@@ -9,6 +9,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
+import net.minecraft.entity.vehicle.StorageMinecartEntity;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -17,6 +18,7 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -26,6 +28,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 import java.util.UUID;
 
@@ -35,7 +38,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		super(entityType, world);
 	}
 
-	private Linkable parentMinecart;
+	protected Linkable parentMinecart;
 	private UUID parentUuid;
 	private Linkable childMinecart;
 	private UUID childUuid;
@@ -203,8 +206,33 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		validateLinks();
 	}
 
-	@Inject(method = "applySlowdown()V", at = @At("HEAD"))
+	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
 	protected void applySlowdown(CallbackInfo ci) {
+		// if we're not in a train, don't modify behavior
+		if(this.parentMinecart != null || this.isFurnace()) {
+			applyAcceleration();
+		}
+			// reimplement water slowdown, ignore passenger/chest contents slowdown (we want the whole train traveling the same speed)
+			double d = 0.96;
+			if(this.isTouchingWater()) {
+				d *= 0.95;
+			}
+			this.setVelocity(this.getVelocity().multiply(d, 0, d));	// idk why y is 0 but all the original minecraft methods do it so yea
+
+			// and then return from applySlowdown without running the original logic
+			ci.cancel();
+		//}
+	}
+
+	@Inject(method = "moveOnRail(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState;)V",
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/vehicle/AbstractMinecartEntity;getMaxOffRailSpeed()D", shift = At.Shift.AFTER),
+			locals = LocalCapture.CAPTURE_FAILHARD)
+	private double moveOnRail_ignorePassengers(BlockPos pos, BlockState state, CallbackInfo ci, double t) {
+		t = 1;
+		return t;
+	}
+
+	protected void applyAcceleration() {
 		BlockState state = this.getBlockStateAtPos();
 
 		if (AbstractRailBlock.isRail(state)) {
@@ -214,41 +242,38 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			//this.setCustomName(Text.literal(this.travelDirection.toString()));
 
 			if(this.isPowered()) {
-				if(this.isFurnace()) {
-					double dynamicVelocityMultiplier = 0.4;
-					if(this.velocityMultiplier > 0) {
-						dynamicVelocityMultiplier = this.velocityMultiplier;
-					}
-					this.setVelocity(
-						Vec3d.of(travelDirection.getVector())
-						.multiply(dynamicVelocityMultiplier)
-					);
+				double dynamicVelocityMultiplier = 0.4;
+				if(this.velocityMultiplier > 0) {
+					dynamicVelocityMultiplier = this.velocityMultiplier;
+				}
+
+				if (this.isFurnace()) {
+					// debug!!
+					this.setCustomName(Text.literal(this.travelDirection.toString()));
 				} else {
 					float distToParent = this.getParent().distanceTo(this);
 					// debug!!
 					this.setCustomName(Text.literal(String.format("%.2f", distToParent)));
 
-					double dynamicVelocityMultiplier = 0.4;
-					if(this.velocityMultiplier > 0) {
-						dynamicVelocityMultiplier = this.velocityMultiplier;
-					} else {
-						if (distToParent > Util.MINECART_LINK_RANGE) {
-							parentMinecart.removeChild();
-						} else if (distToParent > 1.65) {
-							dynamicVelocityMultiplier = 0.45;
-						} else if (distToParent < 1.6) {
-							dynamicVelocityMultiplier = 0.35;
-						}
+					//if(this.velocityMultiplier == 0) {
+					if (distToParent > Util.MINECART_LINK_RANGE) {
+						parentMinecart.removeChild();
+					} else if (distToParent > 1.65) {
+						dynamicVelocityMultiplier += 0.05;
+					} else if (distToParent < 1.6) {
+						dynamicVelocityMultiplier -= 0.05;
 					}
-
-					this.setVelocity(
-						Vec3d.of(travelDirection.getVector())
-						.multiply(dynamicVelocityMultiplier)
-					);
+					//}
 				}
+
+				this.setVelocity(
+						Vec3d.of(travelDirection.getVector())
+								.multiply(dynamicVelocityMultiplier)
+				);
+			} else { // if not powered
+				this.setVelocity(Vec3d.ZERO);
 			}
-		}
-	}
+		}}
 
 	/*@Inject(method = "moveOnRail(Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/block/BlockState)V", at = @At("TAIL"))
 	protected void moveOnRail(BlockPos pos, BlockState state, CallbackInfo ci) {

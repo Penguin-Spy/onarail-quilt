@@ -15,10 +15,13 @@ import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.entity.vehicle.FurnaceMinecartEntity;
 import net.minecraft.inventory.Inventories;
 import net.minecraft.inventory.SidedInventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.ItemScatterer;
@@ -27,6 +30,8 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.world.GameRules;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
+import org.quiltmc.qsl.item.content.registry.api.ItemContentRegistries;
+import org.quiltmc.qsl.item.setting.api.RecipeRemainderLogicHandler;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
@@ -35,13 +40,22 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.Optional;
+
 @Mixin(FurnaceMinecartEntity.class)
 public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity implements SidedInventory, Linkable {
 	private static final int[] SLOT_ORDER = {3, 0, 1, 2}; // pattern, then 3x fuel slots (for fuel/byproducts)
+	private static final double FURNACE_FUEL_FACTOR = 9.0 / 4;
+
 	private DefaultedList<ItemStack> inventory;
+	private boolean shouldTryRefuel = false;
 
 	@Shadow
 	private int fuel;
+	@Shadow
+	protected boolean isLit() { return false; }
+	@Shadow
+	protected void setLit(boolean lit) { }
 
 
 	// useless constructor bc mixins
@@ -80,6 +94,8 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		}
 	}
 	public void markDirty() {
+		System.out.printf("<%s> marked dirty!%n", this.getCustomName());
+		if(this.fuel == 0) shouldTryRefuel = true;
 	}
 	public boolean canPlayerUse(PlayerEntity player) {
 		return !this.isRemoved() && this.getPos().isInRange(player.getPos(), 8.0);
@@ -140,6 +156,58 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	}
 
 	/* FurnaceMinecartEntity methods */
+
+	/**
+	 * @reason don't need any of the default behavior, easier to overwrite than try to disable
+	 * @author Penguin_Spy
+	 */
+	@Overwrite
+	public void tick() {
+		super.tick();
+		if (!this.world.isClient()) {
+			// if this furnace is active (moving)
+			boolean powered = this.isPowered();
+			this.setLit(powered);
+			if (powered) {
+				this.fuel--;
+				this.shouldTryRefuel = this.fuel <= 0;
+			}
+			// try to consume fuel from each slot in order
+			if(shouldTryRefuel) {
+				for(int i = 0; i <= 2; i++) {
+					System.out.printf("checking slot %d; ", i);
+
+					ItemStack fuelStack = inventory.get(i);
+					if(fuelStack.isEmpty()) continue;
+
+					Item fuel = fuelStack.getItem();
+					Optional<Integer> fuelTime = ItemContentRegistries.FUEL_TIMES.get(fuel);
+
+					if(fuelTime.isPresent()) {
+						this.fuel += fuelTime.get() * FURNACE_FUEL_FACTOR;
+						System.out.printf("item %s has fuelTime %d, this.fuel is now %d\n", fuel.getName(), fuelTime.get(), this.fuel);
+						fuelStack.decrement(1);
+						if(fuelStack.isEmpty() && fuel.hasRecipeRemainder()) {
+							ItemStack remainderStack = RecipeRemainderLogicHandler.getRemainder(fuelStack, null);
+							System.out.printf("\titem has remainder %s\n", remainderStack.getName());
+							inventory.set(i, remainderStack);
+						}
+
+						break;
+					}
+				}
+
+				shouldTryRefuel = false; // regardless of if successful
+			}
+
+			this.setCustomName(Text.literal(Integer.toString(this.fuel)));
+
+		// client-side, only for singleplayer!
+		} else if (this.isLit() && this.random.nextInt(4) == 0) {
+			this.world.addParticle(ParticleTypes.LARGE_SMOKE, this.getX(), this.getY() + 0.8, this.getZ(), 0.0, 0.0, 0.0);
+		}
+
+	}
 
 	/**
 	 * Handles right-clicking a furnace minecart (open GUI or start coupling).

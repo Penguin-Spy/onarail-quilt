@@ -14,7 +14,6 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.*;
@@ -76,6 +75,10 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	//  and then directly reference that each call (don't need to serialize tho, can just obtain & re-cache it when necessary)
 	public boolean isPowered() {
 		return this.parentMinecart != null && parentMinecart.isPowered();
+	}
+
+	public boolean isInTrain() {
+		return this.parentMinecart != null || this.isFurnace();
 	}
 
 	// this *might* in very rare, specific circumstances be able to be called recursively and cause a stack overflow,
@@ -159,6 +162,8 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		return childUuid.equals(this.childUuid);
 	}
 
+	/* AbstractMinecartEntity methods */
+
 	@Inject(method="writeCustomDataToNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
 		NbtCompound onARailNbt = new NbtCompound();
@@ -192,10 +197,20 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		validateLinks();
 	}
 
+
+	@Inject(method = "isPushable()Z", at = @At("TAIL"), cancellable = true)
+	public void isPushable(CallbackInfoReturnable<Boolean> cir) {
+		cir.setReturnValue(!this.isInTrain());
+	}
+	/*@Inject(method = "collidesWith(Lnet/minecraft/entity/Entity;)Z", at = @At("TAIL"), cancellable = true)
+	public void collidesWith(Entity other, CallbackInfoReturnable<Boolean> cir) {
+		if(this.isInTrain()) cir.setReturnValue(false);
+	}*/
+
 	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
 	protected void applySlowdown(CallbackInfo ci) {
 		// only modify behavior if we're part of a train
-		if(this.getParent() != null || this.isFurnace()) {
+		if(this.isInTrain()) {
 			this.applyAcceleration();
 			ci.cancel();
 		}
@@ -203,7 +218,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 
 	@Inject(method = "getMaxOffRailSpeed()D", at = @At("HEAD"), cancellable = true)
 	protected void getMaxOffRailSpeed(CallbackInfoReturnable<Double> cir) {
-		if(this.getParent() != null || this.isFurnace()) {
+		if(this.isInTrain()) {
 			cir.setReturnValue((this.isTouchingWater() ? 4.0 : 12.0) / 20.0);
 			cir.cancel();
 		}
@@ -219,11 +234,8 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			if(this.isPowered()) {
 				double dynamicVelocityMultiplier = 0.4;
 
-				if(this.isFurnace()) {
-					this.setCustomName(Text.literal(this.travelDirection.toString()));  // debug!!
-				} else {
+				if (!this.isFurnace()) {
 					float distToParent = this.getParent().distanceTo(this);
-					this.setCustomName(Text.literal(String.format("%.2f", distToParent)));  // debug!
 
 					if (distToParent > Util.MINECART_LINK_RANGE) {
 						parentMinecart.removeChild();
@@ -240,8 +252,6 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 
 				this.setVelocity(Vec3d.of(travelDirection.getVector())
 								.multiply(dynamicVelocityMultiplier));
-
-				//this.setCustomName(Text.literal(String.format("%.2f", this.getVelocity().horizontalLengthSquared())));
 
 			} else { // if not powered
 				this.setVelocity(Vec3d.ZERO);

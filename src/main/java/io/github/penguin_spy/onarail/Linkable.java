@@ -29,6 +29,7 @@ public interface Linkable {
 	default boolean isFurnace() {
 		return false;
 	}
+	boolean isInTrain();
 
 	boolean isRemoved();
 	float distanceTo(Entity entity);

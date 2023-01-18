@@ -2,7 +2,6 @@ package io.github.penguin_spy.onarail;
 
 import net.minecraft.block.enums.RailShape;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.vehicle.FurnaceMinecartEntity;
 import net.minecraft.item.Items;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -38,7 +37,7 @@ public class Util {
 
 			if(!linker.isLinking()) { // we're staring a link
 				// furnace minecarts start a train, other minecarts must be part of a train already to be coupled from
-				if(minecart.getParent() == null && !minecart.isFurnace()) {
+				if(!minecart.isInTrain()) {
 					player.sendMessage(Text.translatable("text.onarail.link.cant_link_as_parent"), true);
 					linker.stopLinking();
 					return ActionResult.FAIL;

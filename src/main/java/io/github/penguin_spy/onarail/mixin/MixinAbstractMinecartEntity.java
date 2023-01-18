@@ -11,9 +11,11 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.*;
@@ -226,6 +228,10 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 
 	protected void applyAcceleration() {
 		BlockState state = this.getBlockStateAtPos();
+		BlockState state_below = this.world.getBlockState(this.getBlockPos().down());
+		if (state_below.isIn(BlockTags.RAILS)) {
+			state = state_below;
+		}
 
 		if (AbstractRailBlock.isRail(state)) {
 			RailShape railShape = state.get(((AbstractRailBlock)state.getBlock()).getShapeProperty());
@@ -234,6 +240,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			if(this.isPowered()) {
 				double dynamicVelocityMultiplier = 0.4;
 
+				// have child minecarts speed up or slow down to maintain the correct distance from the locomotive
 				if (!this.isFurnace()) {
 					float distToParent = this.getParent().distanceTo(this);
 
@@ -248,6 +255,22 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 					if (this.hasPassengers()) {    // account for moveOnRail's reduction
 						dynamicVelocityMultiplier /= 0.75;
 					}
+				}
+
+				this.setCustomName(Text.literal(railShape.name()));
+				// reduce velocity when going uphill/downhill, and when in water
+				if(railShape.isAscending()) {
+					if(Util.isTravelingUphill(travelDirection, railShape)) {
+						this.setCustomName(Text.literal(this.getCustomName() + " up"));
+						dynamicVelocityMultiplier *= 0.7;
+					} else {
+						this.setCustomName(Text.literal(this.getCustomName() + " down"));
+						dynamicVelocityMultiplier *= 0.6;
+					}
+				}
+				if (this.isTouchingWater()) {
+					this.setCustomName(Text.literal(this.getCustomName() + " water"));
+					dynamicVelocityMultiplier *= 0.95;
 				}
 
 				this.setVelocity(Vec3d.of(travelDirection.getVector())

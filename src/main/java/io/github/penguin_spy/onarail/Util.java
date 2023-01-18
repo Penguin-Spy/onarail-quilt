@@ -130,4 +130,14 @@ public class Util {
 		}
 		return dir;
 	}
+
+	public static boolean isTravelingUphill(Direction dir, RailShape railShape) {
+		return switch (dir) {
+			case NORTH -> railShape == RailShape.ASCENDING_NORTH;
+			case EAST -> railShape == RailShape.ASCENDING_EAST;
+			case SOUTH -> railShape == RailShape.ASCENDING_SOUTH;
+			case WEST -> railShape == RailShape.ASCENDING_WEST;
+			default -> false;
+		};
+	}
 }

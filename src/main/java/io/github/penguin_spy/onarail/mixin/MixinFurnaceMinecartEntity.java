@@ -175,8 +175,6 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 			// try to consume fuel from each slot in order
 			if(shouldTryRefuel) {
 				for(int i = 0; i <= 2; i++) {
-					System.out.printf("checking slot %d; ", i);
-
 					ItemStack fuelStack = inventory.get(i);
 					if(fuelStack.isEmpty()) continue;
 
@@ -185,14 +183,11 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 
 					if(fuelTime.isPresent()) {
 						this.fuel += fuelTime.get() * FURNACE_FUEL_FACTOR;
-						System.out.printf("item %s has fuelTime %d, this.fuel is now %d\n", fuel.getName(), fuelTime.get(), this.fuel);
 						fuelStack.decrement(1);
 						if(fuelStack.isEmpty() && fuel.hasRecipeRemainder()) {
 							ItemStack remainderStack = RecipeRemainderLogicHandler.getRemainder(fuelStack, null);
-							System.out.printf("\titem has remainder %s\n", remainderStack.getName());
 							inventory.set(i, remainderStack);
 						}
-
 						break;
 					}
 				}

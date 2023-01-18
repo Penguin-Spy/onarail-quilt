@@ -37,8 +37,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(FurnaceMinecartEntity.class)
 public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity implements SidedInventory, Linkable {
-	private static final int[] EXTRACT_SLOTS = {4, 0, 1, 2}; // pattern, then 3x fuel slots (for fuel byproducts)
-	private static final int[] INSERT_SLOTS = {4, 0, 1, 2, 3}; // pattern, 3x fuel slots, chunk_fuel
+	private static final int[] SLOT_ORDER = {3, 0, 1, 2}; // pattern, then 3x fuel slots (for fuel/byproducts)
 	private DefaultedList<ItemStack> inventory;
 
 	@Shadow
@@ -49,10 +48,10 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	protected MixinFurnaceMinecartEntity(EntityType<?> entityType, World world) {
 		super(entityType, world);
 	}
-
+	// real constructor
 	@Inject(method="<init>*", at = @At("RETURN"))
 	void onConstructed(CallbackInfo ci) {
-		this.inventory = DefaultedList.ofSize(5, ItemStack.EMPTY);	// chunk_fuel, 3x fuel, pattern
+		this.inventory = DefaultedList.ofSize(4, ItemStack.EMPTY);	// 3x fuel, pattern
 	}
 
 	/* Inventory methods */
@@ -86,32 +85,23 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		return !this.isRemoved() && this.getPos().isInRange(player.getPos(), 8.0);
 	}
 	public boolean isValid(int slot, ItemStack stack) {
-		// slot 4 must be empty, all other slots don't care
-		return slot != 4 || this.inventory.get(4).isEmpty();
+		// banner slot must be empty, fuel slots don't care
+		return slot != 3 || this.inventory.get(3).isEmpty();
 	}
 
 	/* SidedInventory methods */
 	public int[] getAvailableSlots(Direction side) {
-		if (side == Direction.DOWN) {
-			return EXTRACT_SLOTS;
-		} else {
-			return INSERT_SLOTS;
-		}
+		return SLOT_ORDER;
 	}
 	public boolean canInsert(int slot, ItemStack stack, @Nullable Direction dir) {
-		return switch (slot) {
-			case 3 -> FurnaceMinecartGUI.ChunkFuelSlot.matches(stack);
-			case 4 -> FurnaceMinecartGUI.PatternSlot.matches(stack);// && this.inventory.get(slot).isEmpty();
-			default -> FurnaceMinecartGUI.FuelSlot.matches(stack);
-		};
+		return slot == 3 ? FurnaceMinecartGUI.PatternSlot.matches(stack)
+						 : FurnaceMinecartGUI.FuelSlot.matches(stack);
 	}
 	public boolean canExtract(int slot, ItemStack stack, Direction dir) {
-		if (slot == 4) {
-			return true;
-		} else if (dir == Direction.DOWN && (slot >= 0 && slot <= 2)) {
+		if (dir == Direction.DOWN && (slot >= 0 && slot <= 2)) { // pull buckets out of fuel slot
 			return stack.isOf(Items.BUCKET);
-		} else {
-			return false;
+		} else { // pull banner out
+			return true;
 		}
 	}
 
@@ -170,13 +160,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		if(result != ActionResult.PASS) {
 			return result;
 		} else {
-			try {
-				FurnaceMinecartGUI gui = new FurnaceMinecartGUI(player, this);
-
-				gui.open();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+			new FurnaceMinecartGUI(player, this).open();
 		}
 		return ActionResult.CONSUME;
 	}
@@ -193,7 +177,6 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	protected void getMaxOffRailSpeed(CallbackInfoReturnable<Double> cir) {
 		cir.setReturnValue(super.getMaxOffRailSpeed());
 	}
-
 
 	public boolean isStoppedByActivatorRail() {
 		BlockState state = this.world.getBlockState(this.getBlockPos());

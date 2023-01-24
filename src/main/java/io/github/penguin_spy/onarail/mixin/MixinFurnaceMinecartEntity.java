@@ -1,6 +1,8 @@
 package io.github.penguin_spy.onarail.mixin;
 
 import io.github.penguin_spy.onarail.Linkable;
+import io.github.penguin_spy.onarail.OnARail;
+import io.github.penguin_spy.onarail.TrainState;
 import io.github.penguin_spy.onarail.Util;
 import io.github.penguin_spy.onarail.gui.FurnaceMinecartGUI;
 import net.minecraft.block.BlockState;
@@ -49,6 +51,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 
 	private DefaultedList<ItemStack> inventory;
 	private boolean shouldTryRefuel = false;
+	private TrainState trainState;
 
 	@Shadow
 	private int fuel;
@@ -66,6 +69,8 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	@Inject(method="<init>*", at = @At("RETURN"))
 	void onConstructed(CallbackInfo ci) {
 		this.inventory = DefaultedList.ofSize(4, ItemStack.EMPTY);	// 3x fuel, pattern
+		this.trainState = new TrainState();
+		OnARail.LOGGER.info("constructed furnace minecart");
 	}
 
 	/* Inventory methods */
@@ -149,10 +154,18 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	@Inject(method="writeCustomDataToNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
 		Inventories.writeNbt(nbt, this.inventory);
+
+		OnARail.LOGGER.info("serializing furnace minecart");
+
+		this.trainState.writeCustomDataToNbt(nbt);
 	}
 	@Inject(method="readCustomDataFromNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void readCustomDataFromNbt(NbtCompound nbt, CallbackInfo ci) {
 		Inventories.readNbt(nbt, this.inventory);
+
+		OnARail.LOGGER.info("deserializing furnace minecart");
+		this.trainState.readCustomDataFromNbt(nbt);
+		OnARail.LOGGER.info("trainState: %s, %f, %b".formatted(this.trainState.targetSpeed.toString(), this.trainState.currentSpeed, this.trainState.isStopped()));
 	}
 
 	/* FurnaceMinecartEntity methods */
@@ -165,8 +178,11 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	public void tick() {
 		super.tick();
 		if (!this.world.isClient()) {
+
+			this.trainState.setStopped(this.isStoppedByActivatorRail() && this.fuel <= 0);
+
 			// if this furnace is active (moving)
-			boolean powered = this.isPowered();
+			boolean powered = !this.trainState.isStopped();
 			this.setLit(powered);
 			if (powered) {
 				this.fuel--;
@@ -231,6 +247,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	// ignore default behavior of furnace minecart's applySlowdown (normally handles acceleration, we do that in AbstractMinecartEntity instead)
 	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
 	public void applySlowdown(CallbackInfo ci) {
+		if(this.world.isClient()) return;
 		super.applySlowdown(); // handles water slowdown & friction
 		ci.cancel();
 	}
@@ -250,9 +267,16 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	}
 
 	/* Linkable methods */
-	@Override // overrides the implementation in MixinAbstractFurnaceMinecart (the IDE doesn't know that, but that's what this is doing when mixed in)
+	/*@Override // overrides the implementation in MixinAbstractFurnaceMinecart (the IDE doesn't know that, but that's what this is doing when mixed in)
 	public boolean isPowered() {
 		return this.fuel > 0 && !isStoppedByActivatorRail();
+	}*/
+	public TrainState getTrainState() {
+		if(this.world.isClient()) {
+			OnARail.LOGGER.warn("[%s] Getting trainState of furnace minecart on client side!!".formatted(this.uuidString));
+		}
+		OnARail.LOGGER.info("[%s] getting furnace minecart trainState: %b".formatted(this.uuidString, this.trainState));
+		return this.trainState;
 	}
 
 	public boolean isFurnace() {

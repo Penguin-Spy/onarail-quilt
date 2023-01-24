@@ -25,11 +25,12 @@ public interface Linkable {
 	boolean isChildUuid(UUID childUuid);
 
 	void playLinkSound(boolean connecting);
-	boolean isPowered();
 	default boolean isFurnace() {
 		return false;
 	}
 	boolean isInTrain();
+
+	TrainState getTrainState();
 
 	boolean isRemoved();
 	float distanceTo(Entity entity);

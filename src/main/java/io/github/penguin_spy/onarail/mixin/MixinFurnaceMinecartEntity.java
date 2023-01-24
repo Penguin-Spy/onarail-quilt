@@ -8,6 +8,7 @@ import io.github.penguin_spy.onarail.gui.FurnaceMinecartGUI;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.PoweredRailBlock;
+import net.minecraft.block.RailBlock;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.damage.DamageSource;
@@ -46,6 +47,14 @@ import java.util.Optional;
 
 @Mixin(FurnaceMinecartEntity.class)
 public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity implements SidedInventory, Linkable {
+	protected MixinFurnaceMinecartEntity(EntityType<?> entityType, World world) {
+		super(entityType, world);
+	}
+
+	@Shadow	private int fuel;
+	@Shadow	protected boolean isLit() { return false; }
+	@Shadow @SuppressWarnings("unused")	protected void setLit(boolean lit) { }
+
 	private static final int[] SLOT_ORDER = {3, 0, 1, 2}; // pattern, then 3x fuel slots (for fuel/byproducts)
 	private static final double FURNACE_FUEL_FACTOR = 9.0 / 4;
 
@@ -53,18 +62,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	private boolean shouldTryRefuel = false;
 	private TrainState trainState;
 
-	@Shadow
-	private int fuel;
-	@Shadow
-	protected boolean isLit() { return false; }
-	@Shadow
-	protected void setLit(boolean lit) { }
 
-
-	// useless constructor bc mixins
-	protected MixinFurnaceMinecartEntity(EntityType<?> entityType, World world) {
-		super(entityType, world);
-	}
 	// real constructor
 	@Inject(method="<init>*", at = @At("RETURN"))
 	void onConstructed(CallbackInfo ci) {
@@ -73,7 +71,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		OnARail.LOGGER.info("constructed furnace minecart");
 	}
 
-	/* Inventory methods */
+/* --- Inventory methods --- */
 	public int size() {
 		return this.inventory.size();
 	}
@@ -100,7 +98,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	}
 	public void markDirty() {
 		System.out.printf("<%s> marked dirty!%n", this.getCustomName());
-		if(this.fuel == 0) shouldTryRefuel = true;
+		if(this.fuel == 0) this.shouldTryRefuel = true;
 	}
 	public boolean canPlayerUse(PlayerEntity player) {
 		return !this.isRemoved() && this.getPos().isInRange(player.getPos(), 8.0);
@@ -110,7 +108,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		return slot != 3 || this.inventory.get(3).isEmpty();
 	}
 
-	/* SidedInventory methods */
+/* --- SidedInventory methods --- */
 	public int[] getAvailableSlots(Direction side) {
 		return SLOT_ORDER;
 	}
@@ -126,7 +124,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		}
 	}
 
-	/* AbstractMinecartEntity methods */
+/* --- AbstractMinecartEntity methods --- */
 
 	// Drop items in inventory when destroyed
 	@Override
@@ -168,7 +166,7 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		OnARail.LOGGER.info("trainState: %s, %f, %b".formatted(this.trainState.targetSpeed.toString(), this.trainState.currentSpeed, this.trainState.isStopped()));
 	}
 
-	/* FurnaceMinecartEntity methods */
+/* --- FurnaceMinecartEntity methods --- */
 
 	/**
 	 * @reason don't need any of the default behavior, easier to overwrite than try to disable
@@ -179,36 +177,36 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		super.tick();
 		if (!this.world.isClient()) {
 
-			this.trainState.setStopped(this.isStoppedByActivatorRail() && this.fuel <= 0);
-
 			// if this furnace is active (moving)
-			boolean powered = !this.trainState.isStopped();
+			boolean powered = !isStopped();
 			this.setLit(powered);
+			this.trainState.setStopped(!powered);
 			if (powered) {
 				this.fuel--;
 				this.shouldTryRefuel = this.fuel <= 0;
 			}
+
 			// try to consume fuel from each slot in order
-			if(shouldTryRefuel) {
+			if(this.shouldTryRefuel) {
 				for(int i = 0; i <= 2; i++) {
-					ItemStack fuelStack = inventory.get(i);
+					ItemStack fuelStack = this.inventory.get(i);
 					if(fuelStack.isEmpty()) continue;
 
-					Item fuel = fuelStack.getItem();
-					Optional<Integer> fuelTime = ItemContentRegistries.FUEL_TIMES.get(fuel);
+					Item fuelItem = fuelStack.getItem();
+					Optional<Integer> fuelTime = ItemContentRegistries.FUEL_TIMES.get(fuelItem);
 
 					if(fuelTime.isPresent()) {
 						this.fuel += fuelTime.get() * FURNACE_FUEL_FACTOR;
 						fuelStack.decrement(1);
-						if(fuelStack.isEmpty() && fuel.hasRecipeRemainder()) {
+						if(fuelStack.isEmpty() && fuelItem.hasRecipeRemainder()) {
 							ItemStack remainderStack = RecipeRemainderLogicHandler.getRemainder(fuelStack, null);
-							inventory.set(i, remainderStack);
+							this.inventory.set(i, remainderStack);
 						}
 						break;
 					}
 				}
 
-				shouldTryRefuel = false; // regardless of if successful
+				this.shouldTryRefuel = false; // regardless of if successful
 			}
 
 			this.setCustomName(Text.literal(Integer.toString(this.fuel)));
@@ -258,19 +256,20 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 		cir.setReturnValue(super.getMaxOffRailSpeed());
 	}
 
-	public boolean isStoppedByActivatorRail() {
+	public boolean isStopped() {
+		if(this.fuel <= 0) return true;
+
 		BlockState state = this.world.getBlockState(this.getBlockPos());
+		if(!RailBlock.isRail(state)) return true;
 		if(state.isOf(Blocks.ACTIVATOR_RAIL)) {
 			return state.get(PoweredRailBlock.POWERED);
 		}
-		return false;
+
+		return false; // has fuel, is on a rail, is not on an activator rail
 	}
 
-	/* Linkable methods */
-	/*@Override // overrides the implementation in MixinAbstractFurnaceMinecart (the IDE doesn't know that, but that's what this is doing when mixed in)
-	public boolean isPowered() {
-		return this.fuel > 0 && !isStoppedByActivatorRail();
-	}*/
+/* --- Linkable methods --- */
+
 	public TrainState getTrainState() {
 		if(this.world.isClient()) {
 			OnARail.LOGGER.warn("[%s] Getting trainState of furnace minecart on client side!!".formatted(this.uuidString));

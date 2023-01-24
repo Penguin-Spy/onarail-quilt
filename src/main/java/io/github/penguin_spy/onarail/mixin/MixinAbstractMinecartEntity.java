@@ -31,7 +31,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.UUID;
 
-
 @Mixin(AbstractMinecartEntity.class)
 public abstract class MixinAbstractMinecartEntity extends Entity implements Linkable {
 	public MixinAbstractMinecartEntity(EntityType<?> entityType, World world) {
@@ -52,46 +51,9 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	private TrainState cachedTrainState; // reference to the object, will update as the locomotive updates it.
 	// "cached" just so it's clear it's a different field from the one in FurnaceMinecartEntity
 
-	@Override
-	public ActionResult interact(PlayerEntity eitherPlayer, Hand hand) {
-		if(eitherPlayer instanceof ServerPlayerEntity player) {
-			return Util.tryLink(this, player, hand);
-		} else {
-			return ActionResult.PASS;
-		}
-	}
-	@Override
-	public void remove(Entity.RemovalReason reason) {
-		this.removeChild();	// this isn't deleting the child like Entity#remove does, it's just disconnecting the link
-		super.remove(reason);
-	}
-
 	private void dropLinkItem() {
 		this.dropStack(Items.CHAIN.getDefaultStack(), 0.5F);
 		this.playLinkSound(false);
-	}
-
-	public void playLinkSound(boolean connecting) {
-		if(connecting) {
-			this.playSound(SoundEvents.BLOCK_CHAIN_PLACE);
-		} else {
-			this.playSound(SoundEvents.BLOCK_CHAIN_BREAK);
-		}
-	}
-
-	public TrainState getTrainState() {
-		if (this.cachedTrainState == null) {
-			validateLinks();
-			if(this.parentMinecart == null) {
-				OnARail.LOGGER.warn("yep, parentMinecart == null");
-			}
-			this.cachedTrainState = this.parentMinecart.getTrainState();
-		}
-		return this.cachedTrainState;
-	}
-
-	public boolean isInTrain() {
-		return this.parentMinecart != null || this.isFurnace();
 	}
 
 	// this *might* in very rare, specific circumstances be able to be called recursively and cause a stack overflow,
@@ -142,6 +104,8 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		}
 	}
 
+/* --- Linkable methods --- */
+
 	public Linkable getParent() {
 		validateLinks();
 		return this.parentMinecart;
@@ -185,7 +149,44 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		return childUuid.equals(this.childUuid);
 	}
 
-	/* AbstractMinecartEntity methods */
+	public void playLinkSound(boolean connecting) {
+		if(connecting) {
+			this.playSound(SoundEvents.BLOCK_CHAIN_PLACE);
+		} else {
+			this.playSound(SoundEvents.BLOCK_CHAIN_BREAK);
+		}
+	}
+
+	public TrainState getTrainState() {
+		if (this.cachedTrainState == null) {
+			validateLinks();
+			if(this.parentMinecart == null) {
+				OnARail.LOGGER.warn("yep, parentMinecart == null");
+			}
+			this.cachedTrainState = this.parentMinecart.getTrainState();
+		}
+		return this.cachedTrainState;
+	}
+
+	public boolean isInTrain() {
+		return this.parentMinecart != null || this.isFurnace();
+	}
+
+/* --- AbstractMinecartEntity methods --- */
+
+	@Override
+	public ActionResult interact(PlayerEntity eitherPlayer, Hand hand) {
+		if(eitherPlayer instanceof ServerPlayerEntity player) {
+			return Util.tryLink(this, player, hand);
+		} else {
+			return ActionResult.PASS;
+		}
+	}
+	@Override
+	public void remove(Entity.RemovalReason reason) {
+		this.removeChild();	// this isn't deleting the child like Entity#remove does, it's just disconnecting the link
+		super.remove(reason);
+	}
 
 	@Inject(method="writeCustomDataToNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
@@ -226,10 +227,6 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	public void isPushable(CallbackInfoReturnable<Boolean> cir) {
 		cir.setReturnValue(!this.isInTrain());
 	}
-	/*@Inject(method = "collidesWith(Lnet/minecraft/entity/Entity;)Z", at = @At("TAIL"), cancellable = true)
-	public void collidesWith(Entity other, CallbackInfoReturnable<Boolean> cir) {
-		if(this.isInTrain()) cir.setReturnValue(false);
-	}*/
 
 	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
 	protected void applySlowdown(CallbackInfo ci) {
@@ -274,7 +271,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 					float distToParent = this.getParent().distanceTo(this);
 
 					if (distToParent > Util.MINECART_LINK_RANGE) {
-						parentMinecart.removeChild();
+						this.parentMinecart.removeChild();
 					} else if (distToParent > 1.65) {
 						dynamicVelocityMultiplier += 0.05 + (0.5 * (distToParent - 1.65));
 					} else if (distToParent < 1.6) {
@@ -302,7 +299,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 					//dynamicVelocityMultiplier *= 0.95;
 				}
 
-				this.setVelocity(Vec3d.of(travelDirection.getVector())
+				this.setVelocity(Vec3d.of(this.travelDirection.getVector())
 								.multiply(dynamicVelocityMultiplier));
 
 			} else { // if not powered

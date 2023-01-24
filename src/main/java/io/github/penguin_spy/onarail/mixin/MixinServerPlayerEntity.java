@@ -21,6 +21,10 @@ public abstract class MixinServerPlayerEntity extends PlayerEntity implements Li
 		super(world, blockPos, spawnAngle, gameProfile);
 	}
 
+	private Linkable linkingMinecart;
+	private Text linkingMinecartName; // cache the name so that we don't re-compute it every tick for displaying the action bar
+
+/* --- PlayerEntity methods --- */
 	@Inject(method="playerTick()V", at = @At("HEAD"))
 	public void playerTick(CallbackInfo ci) {
 		if(this.isLinking()) {
@@ -32,19 +36,18 @@ public abstract class MixinServerPlayerEntity extends PlayerEntity implements Li
 				stopLinking();
 				this.sendMessage(Text.empty(), true);
 			} else {
-				this.sendMessage(Text.translatable("text.onarail.link.start_link", linkingMinecartName), true);
+				this.sendMessage(Text.translatable("text.onarail.link.start_link", this.linkingMinecartName), true);
 			}
 		}
 	}
 
-	private Linkable linkingMinecart;
-	private Text linkingMinecartName; // cache the name so we don't re-compute it every tick for displaying the action bar
+/* --- Linker methods --- */
 	public Linkable getLinkingMinecart() {
 		return this.linkingMinecart;
 	}
 	public void setLinkingMinecart(Linkable minecart) {
-		linkingMinecart = minecart;
-		linkingMinecartName = minecart.getName();
+		this.linkingMinecart = minecart;
+		this.linkingMinecartName = minecart.getName();
 	}
 
 	public void stopLinking() {
@@ -53,6 +56,6 @@ public abstract class MixinServerPlayerEntity extends PlayerEntity implements Li
 	}
 
 	public boolean isLinking() {
-		return linkingMinecart != null;
+		return this.linkingMinecart != null;
 	}
 }

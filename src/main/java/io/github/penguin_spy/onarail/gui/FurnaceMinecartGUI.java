@@ -55,7 +55,7 @@ public class FurnaceMinecartGUI extends SimpleGui {
 	@Override
 	public void onTick() {
 		super.onTick();
-		if(!furnaceMinecart.canPlayerUse(this.player)) this.close();
+		if(!this.furnaceMinecart.canPlayerUse(this.player)) this.close();
 	}
 
 	public static class FuelSlot extends Slot {

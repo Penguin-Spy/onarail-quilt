@@ -4,7 +4,6 @@ import io.github.penguin_spy.onarail.Linkable;
 import io.github.penguin_spy.onarail.Util;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.entity.vehicle.StorageMinecartEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.ActionResult;
@@ -35,8 +34,8 @@ public abstract class MixinStorageMinecartEntity extends MixinAbstractMinecartEn
 	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
 	protected void applySlowdown(CallbackInfo ci) {
 		// only modify behavior if we're part of a train
-		if(parentMinecart != null) {
-			applyAcceleration();
+		if(this.parentMinecart != null) {
+			this.applyAcceleration();
 			ci.cancel();
 		}
 	}

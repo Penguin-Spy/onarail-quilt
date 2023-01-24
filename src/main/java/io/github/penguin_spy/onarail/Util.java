@@ -11,7 +11,7 @@ import net.minecraft.util.math.Direction;
 import static net.minecraft.util.math.Direction.*;
 
 public class Util {
-	public static int MINECART_LINK_RANGE = 3;
+	public static final int MINECART_LINK_RANGE = 3;
 
 
 	/**

@@ -244,7 +244,8 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	@Inject(method = "getMaxOffRailSpeed()D", at = @At("HEAD"), cancellable = true)
 	protected void getMaxOffRailSpeed(CallbackInfoReturnable<Double> cir) {
 		if(this.isInTrain()) {
-			cir.setReturnValue((this.isTouchingWater() ? 4.0 : 12.0) / 20.0);
+			cir.setReturnValue(100.0); // temp!!!!
+			//cir.setReturnValue((this.isTouchingWater() ? 4.0 : 12.0) / 20.0);
 			cir.cancel();
 		}
 	}
@@ -261,7 +262,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			this.travelDirection = Util.alignDirWithRail(this.travelDirection, railShape);
 
 			if(!this.cachedTrainState.isStopped()) {
-				double dynamicVelocityMultiplier = 0.4;
+				double dynamicVelocityMultiplier = this.cachedTrainState.currentSpeed;
 
 				// have child minecarts speed up or slow down to maintain the correct distance from the locomotive
 				if (!this.isFurnace()) {

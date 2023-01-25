@@ -42,6 +42,7 @@ public class TrainState {
 			if(onARailNbt.contains(TRAIN_STATE_TAG)) {
 				NbtCompound trainStateNbt = onARailNbt.getCompound(TRAIN_STATE_TAG);
 				if(trainStateNbt.contains(TARGET_SPEED_TAG)) {
+					// todo: provide better error/handle when this string isn't a real speed value
 					this.targetSpeed = Speed.valueOf(trainStateNbt.getString(TARGET_SPEED_TAG));
 				}
 				if(trainStateNbt.contains(CURRENT_SPEED_TAG)) {
@@ -54,14 +55,15 @@ public class TrainState {
 
 	@SuppressWarnings("unused")
 	public enum Speed {
-		LOW(0.1),
-		MEDIUM_LOW(0.25),
-		MEDIUM(0.4), // this is the only value that's been tested
-		MEDIUM_HIGH(0.55),
-		HIGH(0.7);
+		LOW(3),			// 0.15
+		MEDIUM_LOW(5), 	// 0.25
+		MEDIUM(8), 		// 0.4
+		MEDIUM_HIGH(14),	// 0.7
+		HIGH(30);			// 1.5  // needs to be like 70 m/s ish, comparable to boat on blue ice (and better than boat on normal ice)
+												// irl high-speed rail can reach speeds of 300-350 km/h (83.3-97.2 m/s), although 250-270 km/h (69.4-75 m/s) is more reasonable
 
 		private final double value;
-		Speed(double value) { this.value = value; }
+		Speed(double metersPerSecond) { this.value = metersPerSecond / 20; }
 
 		double getValue() { return this.value; }
 	}

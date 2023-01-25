@@ -43,15 +43,9 @@ public class TrainState {
 				NbtCompound trainStateNbt = onARailNbt.getCompound(TRAIN_STATE_TAG);
 				if(trainStateNbt.contains(TARGET_SPEED_TAG)) {
 					this.targetSpeed = Speed.valueOf(trainStateNbt.getString(TARGET_SPEED_TAG));
-				} else {
-					OnARail.LOGGER.warn("deserializing train state without TARGET_SPEED_TAG");
-					//this.targetSpeed = Speed.MEDIUM;
 				}
 				if(trainStateNbt.contains(CURRENT_SPEED_TAG)) {
 					this.currentSpeed = trainStateNbt.getDouble(CURRENT_SPEED_TAG);
-				} else {
-					OnARail.LOGGER.warn("deserializing train state without CURRENT_SPEED_TAG");
-					//this.currentSpeed = 0;
 				}
 			}
 		}
@@ -60,7 +54,6 @@ public class TrainState {
 
 	@SuppressWarnings("unused")
 	public enum Speed {
-		STOPPED(0),
 		LOW(0.1),
 		MEDIUM_LOW(0.25),
 		MEDIUM(0.4), // this is the only value that's been tested

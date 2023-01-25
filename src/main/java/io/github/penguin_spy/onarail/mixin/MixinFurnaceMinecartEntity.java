@@ -174,9 +174,8 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	 */
 	@Overwrite
 	public void tick() {
-		super.tick();
+		// update trainState before running the AbstractMinecartEntity.tick()
 		if (!this.world.isClient()) {
-
 			// if this furnace is active (moving)
 			boolean powered = !isStopped();
 			this.setLit(powered);
@@ -211,8 +210,12 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 
 			this.setCustomName(Text.literal(Integer.toString(this.fuel)));
 
+		}
+
+		super.tick();
+
 		// client-side, only for singleplayer!
-		} else if (this.isLit() && this.random.nextInt(4) == 0) {
+		if (this.isLit() && this.random.nextInt(4) == 0) {
 			this.world.addParticle(ParticleTypes.LARGE_SMOKE, this.getX(), this.getY() + 0.8, this.getZ(), 0.0, 0.0, 0.0);
 		}
 
@@ -245,7 +248,6 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	// ignore default behavior of furnace minecart's applySlowdown (normally handles acceleration, we do that in AbstractMinecartEntity instead)
 	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
 	public void applySlowdown(CallbackInfo ci) {
-		if(this.world.isClient()) return;
 		super.applySlowdown(); // handles water slowdown & friction
 		ci.cancel();
 	}
@@ -271,10 +273,6 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 /* --- Linkable methods --- */
 
 	public TrainState getTrainState() {
-		if(this.world.isClient()) {
-			OnARail.LOGGER.warn("[%s] Getting trainState of furnace minecart on client side!!".formatted(this.uuidString));
-		}
-		OnARail.LOGGER.info("[%s] getting furnace minecart trainState: %b".formatted(this.uuidString, this.trainState));
 		return this.trainState;
 	}
 

@@ -56,8 +56,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		this.playLinkSound(false);
 	}
 
-	// this *might* in very rare, specific circumstances be able to be called recursively and cause a stack overflow,
-	// but it shouldn't because after being called once on a minecart all subsequent calls should do nothing.
+	// this shouldn't be called recursively because after being called once on a minecart all subsequent calls should do nothing.
 	private void validateLinks() {
 		if(this.parentMinecart == null) {
 			if(this.parentUuid != null) {
@@ -65,7 +64,6 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 				if (parentEntity instanceof Linkable parentLinkable) {
 					if (parentLinkable.isChildUuid(this.uuid)) {
 						this.parentMinecart = parentLinkable;
-						this.cachedTrainState = parentLinkable.getTrainState();
 					}
 				}
 				if (this.parentMinecart == null) { // if it's still null, we had an invalid link
@@ -74,15 +72,6 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			}
 		} else if(this.parentMinecart.isRemoved()) {
 			this.removeParent();
-		}
-
-		// TODO: this feels dumb
-		if(this.cachedTrainState == null && this.isInTrain()) {
-			if(!this.isFurnace()) {
-				this.cachedTrainState = this.parentMinecart.getTrainState();
-			} else {
-				this.cachedTrainState = this.getTrainState();
-			}
 		}
 
 		if(this.childMinecart == null) {
@@ -104,6 +93,19 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		}
 	}
 
+	private void validateTrainState() {
+		if(this.cachedTrainState == null && this.isInTrain()) {
+			// must save it here (again) because the override in FurnaceMinecartEntity can't cache it
+			this.cachedTrainState = this.getTrainState();
+		}
+	}
+
+	// called once, before the first tick() and after deserialization
+	private void firstUpdate() {
+		validateLinks();
+		validateTrainState();
+	}
+
 /* --- Linkable methods --- */
 
 	public Linkable getParent() {
@@ -113,6 +115,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	public void setParent(@NotNull Linkable minecart) {
 		this.parentMinecart = minecart;
 		this.parentUuid = minecart.getUuid();
+		validateTrainState();
 	}
 	public Linkable getChild() {
 		validateLinks();
@@ -128,6 +131,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			this.removeChild();
 			this.parentMinecart = null;
 			this.parentUuid = null;
+			this.cachedTrainState = null;
 		}
 	}
 	public boolean isParentUuid(UUID parentUuid) {
@@ -158,11 +162,8 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	}
 
 	public TrainState getTrainState() {
+		// get it from the parent if we don't have it (and save it for future reference)
 		if (this.cachedTrainState == null) {
-			validateLinks();
-			if(this.parentMinecart == null) {
-				OnARail.LOGGER.warn("yep, parentMinecart == null");
-			}
 			this.cachedTrainState = this.parentMinecart.getTrainState();
 		}
 		return this.cachedTrainState;
@@ -218,8 +219,11 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 
 	@Inject(method = "tick()V", at = @At("HEAD"))
 	public void tick(CallbackInfo ci) {
-		if(this.world.isClient()) return;
-		validateLinks();
+		if(this.firstUpdate) {
+			firstUpdate();
+		} else {
+			validateLinks(); // for detecting when parent/child is removed
+		}
 	}
 
 
@@ -230,7 +234,6 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 
 	@Inject(method = "applySlowdown()V", at = @At("HEAD"), cancellable = true)
 	protected void applySlowdown(CallbackInfo ci) {
-		if(this.world.isClient()) return;
 		// only modify behavior if we're part of a train
 		if(this.isInTrain()) {
 			this.applyAcceleration();
@@ -247,12 +250,6 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	}
 
 	protected void applyAcceleration() {
-		if(this.cachedTrainState == null) {
-			// only ever called in this state once by the furnace minecart immediately after world load
-			OnARail.LOGGER.warn("[%s] this.trainState is null, %b".formatted(this.uuid.toString(), this.isFurnace()));
-			return;
-		}
-
 		BlockState state = this.getBlockStateAtPos();
 		BlockState state_below = this.world.getBlockState(this.getBlockPos().down());
 		if (state_below.isIn(BlockTags.RAILS)) {

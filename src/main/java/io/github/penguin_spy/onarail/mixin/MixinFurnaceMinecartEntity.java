@@ -152,18 +152,12 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 	@Inject(method="writeCustomDataToNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void writeCustomDataToNbt(NbtCompound nbt, CallbackInfo ci) {
 		Inventories.writeNbt(nbt, this.inventory);
-
-		OnARail.LOGGER.info("serializing furnace minecart");
-
 		this.trainState.writeCustomDataToNbt(nbt);
 	}
 	@Inject(method="readCustomDataFromNbt(Lnet/minecraft/nbt/NbtCompound;)V", at = @At("TAIL"))
 	protected void readCustomDataFromNbt(NbtCompound nbt, CallbackInfo ci) {
 		Inventories.readNbt(nbt, this.inventory);
-
-		OnARail.LOGGER.info("deserializing furnace minecart");
 		this.trainState.readCustomDataFromNbt(nbt);
-		OnARail.LOGGER.info("trainState: %s, %f, %b".formatted(this.trainState.targetSpeed.toString(), this.trainState.currentSpeed, this.trainState.isStopped()));
 	}
 
 /* --- FurnaceMinecartEntity methods --- */
@@ -180,10 +174,24 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 			boolean powered = !isStopped();
 			this.setLit(powered);
 			this.trainState.setStopped(!powered);
+
 			if (powered) {
 				this.fuel--;
 				this.shouldTryRefuel = this.fuel <= 0;
+
+				// accelerate at 1m/s²
+				double targetSpeed = trainState.getTargetSpeedValue();
+				double currentSpeed = trainState.getCurrentSpeed();
+				if(currentSpeed < targetSpeed) {
+					trainState.setCurrentSpeed(Math.round((currentSpeed + 0.01) * 100) / 100.0);
+				} else if(currentSpeed > targetSpeed) {
+					trainState.setCurrentSpeed(Math.round((currentSpeed - 0.01) * 100) / 100.0);
+				}
+			} else { // the train is currently stopped
+				trainState.setCurrentSpeed(0.0);
 			}
+
+			this.setCustomName(Text.literal(Double.toString(trainState.getCurrentSpeed())));
 
 			// try to consume fuel from each slot in order
 			if(this.shouldTryRefuel) {
@@ -203,13 +211,9 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 						}
 						break;
 					}
+					this.shouldTryRefuel = false; // regardless of if successful
 				}
-
-				this.shouldTryRefuel = false; // regardless of if successful
 			}
-
-			this.setCustomName(Text.literal(Integer.toString(this.fuel)));
-
 		}
 
 		super.tick();

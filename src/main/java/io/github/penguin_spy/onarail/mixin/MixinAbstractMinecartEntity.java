@@ -262,7 +262,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			this.travelDirection = Util.alignDirWithRail(this.travelDirection, railShape);
 
 			if(!this.cachedTrainState.isStopped()) {
-				double dynamicVelocityMultiplier = this.cachedTrainState.currentSpeed;
+				double dynamicVelocityMultiplier = this.cachedTrainState.getCurrentSpeed();
 
 				// have child minecarts speed up or slow down to maintain the correct distance from the locomotive
 				if (!this.isFurnace()) {
@@ -279,9 +279,9 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 					if (this.hasPassengers()) {    // account for moveOnRail's reduction
 						dynamicVelocityMultiplier /= 0.75;
 					}
+					this.setCustomName(Text.literal(railShape.name()));
 				}
 
-				this.setCustomName(Text.literal(railShape.name()));
 				// reduce velocity when going uphill/downhill, and when in water
 				if(railShape.isAscending()) {
 					if(Util.isTravelingUphill(this.travelDirection, railShape)) {

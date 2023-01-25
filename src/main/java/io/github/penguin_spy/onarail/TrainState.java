@@ -12,8 +12,8 @@ public class TrainState {
 	private static final String TARGET_SPEED_TAG = "targetSpeed";
 	private static final String CURRENT_SPEED_TAG = "currentSpeed";
 
-	public Speed targetSpeed;
-	public double currentSpeed;
+	private Speed targetSpeed;
+	private double currentSpeed;
 	private boolean stopped; // not serialized, determined from world state (is locomotive on activator rail)
 
 	public TrainState() {
@@ -29,6 +29,11 @@ public class TrainState {
 		return this.stopped;
 	}
 
+	public double getCurrentSpeed() { return this.currentSpeed; }
+	public double getTargetSpeedValue() { return this.targetSpeed.getValue(); }
+	public void setCurrentSpeed(double value) { this.currentSpeed = value; }
+	public void setTargetSpeed(Speed target) { this.targetSpeed = target; }
+
 	public void writeCustomDataToNbt(NbtCompound nbt) {
 		NbtCompound trainStateNbt = new NbtCompound();
 		trainStateNbt.putString(TARGET_SPEED_TAG, this.targetSpeed.name());
@@ -43,6 +48,8 @@ public class TrainState {
 				NbtCompound trainStateNbt = onARailNbt.getCompound(TRAIN_STATE_TAG);
 				if(trainStateNbt.contains(TARGET_SPEED_TAG)) {
 					// todo: provide better error/handle when this string isn't a real speed value
+					//  /data modify says "an unexpected error occurred while trying to run that command",
+					//  and i'm pretty sure it will crash on world load
 					this.targetSpeed = Speed.valueOf(trainStateNbt.getString(TARGET_SPEED_TAG));
 				}
 				if(trainStateNbt.contains(CURRENT_SPEED_TAG)) {
@@ -65,7 +72,7 @@ public class TrainState {
 		private final double value;
 		Speed(double metersPerSecond) { this.value = metersPerSecond / 20; }
 
-		double getValue() { return this.value; }
+		public double getValue() { return this.value; }
 	}
 }
 

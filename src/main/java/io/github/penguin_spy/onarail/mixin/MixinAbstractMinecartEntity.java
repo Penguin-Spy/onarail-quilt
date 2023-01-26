@@ -51,6 +51,8 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	private Linkable childMinecart;
 	private UUID childUuid;
 
+	private BlockState railBlockState;
+
 	protected Direction travelDirection = Direction.NORTH;
 	protected TrainState trainState;
 
@@ -175,17 +177,32 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		return this.trainState;
 	}
 
+	/**
+	 * Gets the block state at this minecart's position, or the one below it if that's not a rail block,
+	 * or {@code null} if neither are a rail.
+	 * @return the BlockState (guaranteed to be an AbstractRailBlock), or null if the minecart is not on a rail currently.
+	 */
 	@Nullable
-	public RailShape getRailShapeAtPos() {
-		BlockState state = this.getBlockStateAtPos();
-		BlockState state_below = this.world.getBlockState(this.getBlockPos().down());
-		if (AbstractRailBlock.isRail(state_below)) {
-			state = state_below;
-		}
+	public BlockState getRailBlockState() {
+		if(railBlockState != null) { return railBlockState; }
 
-		if (AbstractRailBlock.isRail(state)) {
+		BlockState state = this.world.getBlockState(this.getBlockPos());
+		if (AbstractRailBlock.isRail(state)) { railBlockState = state; return state; }
+
+		state = this.world.getBlockState(this.getBlockPos().down());
+		if (AbstractRailBlock.isRail(state)) { railBlockState = state; return state; }
+
+		return null;
+	}
+
+	@Nullable
+	public RailShape getRailShape() {
+		BlockState state = this.getRailBlockState();
+
+		if (state != null) {
 			return state.get(((AbstractRailBlock) state.getBlock()).getShapeProperty());
 		}
+
 		return null;
 	}
 
@@ -234,12 +251,13 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	}
 
 	@Inject(method = "tick()V", at = @At("HEAD"))
-	public void tick(CallbackInfo ci) {
-		if(this.firstUpdate) {
-			firstUpdate();
-		} else {
-			validateLinks(); // for detecting when parent/child is removed
-		}
+	public void tickStart(CallbackInfo ci) {
+		if(this.firstUpdate) { firstUpdate(); }
+		else { validateLinks(); } // for detecting when parent/child is removed
+	}
+	@Inject(method = "tick()V", at = @At("TAIL"))
+	public void tickEnd(CallbackInfo ci) {
+		this.railBlockState = null;
 	}
 
 
@@ -267,13 +285,13 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	}
 
 	protected void applyAcceleration() {
-		RailShape railShape = this.getRailShapeAtPos();
+		RailShape railShape = this.getRailShape();
 
 		if(railShape != null) {
 			this.travelDirection = Util.alignDirWithRail(this.travelDirection, railShape);
 
-			if(!this.trainState.isStopped()) {
-				double dynamicVelocityMultiplier = this.trainState.getCurrentSpeed();
+			double currentSpeed = this.trainState.getCurrentSpeed();
+			if(currentSpeed > 0) {
 
 				// have child minecarts speed up or slow down to maintain the correct distance from the locomotive
 				if (!this.isFurnace()) {
@@ -282,22 +300,20 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 					if (distToParent > Util.MINECART_LINK_RANGE) {
 						this.parentMinecart.removeChild();
 					} else if (distToParent > 1.65) {
-						dynamicVelocityMultiplier += 0.05 + (0.5 * (distToParent - 1.65));
+						currentSpeed += 1 + (10 * (distToParent - 1.65));
 					} else if (distToParent < 1.6) {
-						dynamicVelocityMultiplier -= 0.1;
+						currentSpeed -= 2;
 					}
 
 					if (this.hasPassengers()) {    // account for moveOnRail's reduction
-						dynamicVelocityMultiplier /= 0.75;
+						currentSpeed /= 0.75;
 					}
 					this.setCustomName(Text.literal(railShape.name()));
 				}
 
 				this.setVelocity(Vec3d.of(this.travelDirection.getVector())
-								.multiply(dynamicVelocityMultiplier));
+								.multiply(currentSpeed / 20));
 
-			} else { // if not powered
-				this.setVelocity(Vec3d.ZERO);
 			}
 		}
 	}

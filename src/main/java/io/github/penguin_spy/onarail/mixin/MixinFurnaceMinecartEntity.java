@@ -8,7 +8,6 @@ import io.github.penguin_spy.onarail.gui.FurnaceMinecartGUI;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.PoweredRailBlock;
-import net.minecraft.block.RailBlock;
 import net.minecraft.block.enums.RailShape;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
@@ -168,44 +167,54 @@ public abstract class MixinFurnaceMinecartEntity extends MixinAbstractMinecartEn
 	public void tick() {
 		// update trainState before running the AbstractMinecartEntity.tick()
 		if (!this.world.isClient()) {
-			// if this furnace is active (moving)
-			boolean powered = !isStopped();
-			this.setLit(powered);
-			this.trainState.setStopped(!powered);
 
-			if (powered) {
+			// if this furnace is active (moving)
+			if (!shouldStop()) {
+				this.setLit(true);
 				this.fuel--;
 				this.shouldTryRefuel = this.fuel <= 0;
 
 				double targetSpeed = trainState.getTargetSpeedValue();
-				double currentSpeed = trainState.getCurrentSpeed();
-				RailShape railShape = this.getRailShapeAtPos();
+				if(targetSpeed != -1) {
+					double currentSpeed = trainState.getCurrentSpeed();
+					RailShape railShape = this.getRailShape();
 
-				// determine speed based on the conditions of the furnace minecart (should eventually base this on all carts' status)
-				if (railShape != null && railShape.isAscending()) {
-					if (Util.isTravelingUphill(this.travelDirection, railShape)) {
-						this.setCustomName(Text.literal(this.getCustomName() + " up"));
-						targetSpeed *= 0.7;
-					} else {
-						this.setCustomName(Text.literal(this.getCustomName() + " down"));
-						targetSpeed *= 0.6;	// once i fix trains staying together downhill, this should instead increase the speed
+					// determine speed based on the conditions of the furnace minecart (should eventually base this on all carts' status)
+					if (railShape != null && railShape.isAscending()) {
+						if (Util.isTravelingUphill(this.travelDirection, railShape)) {
+							this.setCustomName(Text.literal(this.getCustomName() + " up"));
+							targetSpeed *= 0.7;
+						} else {
+							this.setCustomName(Text.literal(this.getCustomName() + " down"));
+							targetSpeed *= 0.6;    // once i fix trains staying together downhill, this should instead increase the speed
+							// also, the minecraft moveOnRail() code that pushes minecarts down ascending rails messes with this
+							//  and with the catch-up & slow-down code in applyAcceleration()
+						}
+					}
+					if (this.isTouchingWater()) {
+						this.setCustomName(Text.literal(this.getCustomName() + " water"));
+						targetSpeed *= 0.5;
+					}
+
+					// accelerate at 0.2m/s²
+					if (currentSpeed < targetSpeed - 0.01) {
+						trainState.setCurrentSpeed(currentSpeed + 0.2);
+					} else if (currentSpeed > targetSpeed + 0.01) {
+						trainState.setCurrentSpeed(currentSpeed - 0.2);
+					} else { // close enough, just snap to the target speed
+						trainState.setCurrentSpeed(targetSpeed);
 					}
 				}
-				if(this.isTouchingWater()) {
-					this.setCustomName(Text.literal(this.getCustomName() + " water"));
-					targetSpeed *= 0.5;
+
+			} else { // the train is currently stopped/stopping
+				double currentSpeed = trainState.getCurrentSpeed();
+				if(currentSpeed > 0.01) {
+					this.setLit(true);
+					trainState.setCurrentSpeed(currentSpeed - 0.5);
+				} else {
+					trainState.setCurrentSpeed(0.0);
+					this.setLit(false);
 				}
-
-				// accelerate at 0.2m/s²
-				if(currentSpeed < targetSpeed) {
-					trainState.setCurrentSpeed(Math.round((currentSpeed + 0.01) * 100) / 100.0);
-				} else if(currentSpeed > targetSpeed) {
-					trainState.setCurrentSpeed(Math.round((currentSpeed - 0.01) * 100) / 100.0);
-				}
-
-
-			} else { // the train is currently stopped
-				trainState.setCurrentSpeed(0.0);
 			}
 
 			this.setCustomName(Text.literal(Double.toString(trainState.getCurrentSpeed())));
@@ -279,16 +288,17 @@ public abstract class MixinFurnaceMinecartEntity extends MixinAbstractMinecartEn
 		cir.setReturnValue(super.getMaxOffRailSpeed());
 	}
 
-	public boolean isStopped() {
-		if(this.fuel <= 0) return true;
+	public boolean shouldStop() {
+		if(this.fuel <= 0) { return true; }
 
-		BlockState state = this.world.getBlockState(this.getBlockPos());
-		if(!RailBlock.isRail(state)) return true;
+		BlockState state = this.getRailBlockState();
+		if(state == null) { return true; }
+
 		if(state.isOf(Blocks.ACTIVATOR_RAIL)) {
 			return state.get(PoweredRailBlock.POWERED);
 		}
 
-		return false; // has fuel, is on a rail, is not on an activator rail
+		return false; // has fuel, is on a rail, is not on a powered activator rail
 	}
 
 /* --- Linkable methods --- */

@@ -32,7 +32,7 @@ public interface Linkable {
 	boolean isInTrain();
 
 	TrainState getTrainState();
-	RailShape getRailShapeAtPos();
+	RailShape getRailShape();
 
 	boolean isRemoved();
 	float distanceTo(Entity entity);

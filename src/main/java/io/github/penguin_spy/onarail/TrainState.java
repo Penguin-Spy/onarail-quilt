@@ -16,24 +16,15 @@ public class TrainState {
 
 	private Speed targetSpeed;
 	private double currentSpeed;
-	private boolean stopped; // not serialized, determined from world state (is locomotive on activator rail)
 
 	public TrainState() {
 		this.targetSpeed = Speed.MEDIUM;
 		this.currentSpeed = 0;
-		this.stopped = false;
-	}
-
-	public void setStopped(boolean stopped) {
-		this.stopped = stopped;
-	}
-	public boolean isStopped() {
-		return this.stopped;
 	}
 
 	public double getCurrentSpeed() { return this.currentSpeed; }
 	public double getTargetSpeedValue() { return this.targetSpeed.getValue(); }
-	public void setCurrentSpeed(double value) { this.currentSpeed = value; }
+	public void setCurrentSpeed(double value) { this.currentSpeed = Math.max(value, 0.0); }
 	public void setTargetSpeed(Speed target) { this.targetSpeed = target; }
 
 	public void writeCustomDataToNbt(NbtCompound nbt) {
@@ -65,13 +56,14 @@ public class TrainState {
 		MEDIUM_LOW(5), 	// 0.25
 		MEDIUM(8), 		// 0.4
 		MEDIUM_HIGH(14),	// 0.7
-		HIGH(30);			// 1.5  // needs to be like 70 m/s ish, comparable to boat on blue ice (and better than boat on normal ice)
+		HIGH(30),			// 1.5  // needs to be like 70 m/s ish, comparable to boat on blue ice (and better than boat on normal ice)
 												// irl high-speed rail can reach speeds of 300-350 km/h (83.3-97.2 m/s), although 250-270 km/h (69.4-75 m/s) is more reasonable
+		MANUAL(-1);
 
 		private final double value;
-		Speed(double metersPerSecond) { this.value = metersPerSecond / 20; }
+		Speed(double metersPerSecond) { this.value = metersPerSecond; }
 
-		public double getValue() { return this.value; }
+		private double getValue() { return this.value; }
 
 		public static Speed fromName(String name) {
 			if(staticValues.contains(name)) {

@@ -314,6 +314,8 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 				this.setVelocity(Vec3d.of(this.travelDirection.getVector())
 								.multiply(currentSpeed / 20));
 
+			} else {
+				this.setVelocity(Vec3d.ZERO);
 			}
 		}
 	}

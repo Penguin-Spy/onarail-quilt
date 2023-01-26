@@ -182,17 +182,17 @@ public abstract class MixinFurnaceMinecartEntity extends MixinAbstractMinecartEn
 					// determine speed based on the conditions of the furnace minecart (should eventually base this on all carts' status)
 					if (railShape != null && railShape.isAscending()) {
 						if (Util.isTravelingUphill(this.travelDirection, railShape)) {
-							this.setCustomName(Text.literal(this.getCustomName() + " up"));
+							//this.setCustomName(Text.literal(this.getCustomName() + " up"));
 							targetSpeed *= 0.7;
 						} else {
-							this.setCustomName(Text.literal(this.getCustomName() + " down"));
+							//this.setCustomName(Text.literal(this.getCustomName() + " down"));
 							targetSpeed *= 0.6;    // once i fix trains staying together downhill, this should instead increase the speed
 							// also, the minecraft moveOnRail() code that pushes minecarts down ascending rails messes with this
 							//  and with the catch-up & slow-down code in applyAcceleration()
 						}
 					}
 					if (this.isTouchingWater()) {
-						this.setCustomName(Text.literal(this.getCustomName() + " water"));
+						//this.setCustomName(Text.literal(this.getCustomName() + " water"));
 						targetSpeed *= 0.5;
 					}
 
@@ -207,13 +207,12 @@ public abstract class MixinFurnaceMinecartEntity extends MixinAbstractMinecartEn
 				}
 
 			} else { // the train is currently stopped/stopping
+				this.setLit(false);
 				double currentSpeed = trainState.getCurrentSpeed();
 				if(currentSpeed > 0.01) {
-					this.setLit(true);
 					trainState.setCurrentSpeed(currentSpeed - 0.5);
 				} else {
 					trainState.setCurrentSpeed(0.0);
-					this.setLit(false);
 				}
 			}
 

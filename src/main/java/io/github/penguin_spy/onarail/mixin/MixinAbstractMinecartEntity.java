@@ -1,7 +1,6 @@
 package io.github.penguin_spy.onarail.mixin;
 
 import io.github.penguin_spy.onarail.Linkable;
-import io.github.penguin_spy.onarail.OnARail;
 import io.github.penguin_spy.onarail.TrainState;
 import io.github.penguin_spy.onarail.Util;
 import net.minecraft.block.AbstractRailBlock;
@@ -9,11 +8,11 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.enums.RailShape;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
@@ -23,7 +22,9 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.math.*;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -36,6 +37,9 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	public MixinAbstractMinecartEntity(EntityType<?> entityType, World world) {
 		super(entityType, world);
 	}
+	@Shadow public void dropItems(DamageSource damageSource) {}
+	@Shadow public void applySlowdown() {}
+	@Shadow public double getMaxOffRailSpeed() { throw new AssertionError(); }
 
 	private static final String ON_A_RAIL_TAG = "onarail";
 	private static final String PARENT_UUID_TAG = "parentUUID";
@@ -47,9 +51,8 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	private Linkable childMinecart;
 	private UUID childUuid;
 
-	private Direction travelDirection = Direction.NORTH;
-	private TrainState cachedTrainState; // reference to the object, will update as the locomotive updates it.
-	// "cached" just so it's clear it's a different field from the one in FurnaceMinecartEntity
+	protected Direction travelDirection = Direction.NORTH;
+	protected TrainState trainState;
 
 	private void dropLinkItem() {
 		this.dropStack(Items.CHAIN.getDefaultStack(), 0.5F);
@@ -94,14 +97,13 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	}
 
 	private void validateTrainState() {
-		if(this.cachedTrainState == null && this.isInTrain()) {
-			// must save it here (again) because the override in FurnaceMinecartEntity can't cache it
-			this.cachedTrainState = this.getTrainState();
+		if(this.trainState == null && this.isInTrain()) {
+			this.getTrainState();
 		}
 	}
 
 	// called once, before the first tick() and after deserialization
-	private void firstUpdate() {
+	protected void firstUpdate() {
 		validateLinks();
 		validateTrainState();
 	}
@@ -131,7 +133,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			this.removeChild();
 			this.parentMinecart = null;
 			this.parentUuid = null;
-			this.cachedTrainState = null;
+			this.trainState = null;
 		}
 	}
 	public boolean isParentUuid(UUID parentUuid) {
@@ -161,16 +163,30 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		}
 	}
 
-	public TrainState getTrainState() {
-		// get it from the parent if we don't have it (and save it for future reference)
-		if (this.cachedTrainState == null) {
-			this.cachedTrainState = this.parentMinecart.getTrainState();
-		}
-		return this.cachedTrainState;
-	}
-
 	public boolean isInTrain() {
 		return this.parentMinecart != null || this.isFurnace();
+	}
+
+	public TrainState getTrainState() {
+		// get it from the parent if we don't have it (and save it for future reference)
+		if (this.trainState == null) {
+			this.trainState = this.parentMinecart.getTrainState();
+		}
+		return this.trainState;
+	}
+
+	@Nullable
+	public RailShape getRailShapeAtPos() {
+		BlockState state = this.getBlockStateAtPos();
+		BlockState state_below = this.world.getBlockState(this.getBlockPos().down());
+		if (AbstractRailBlock.isRail(state_below)) {
+			state = state_below;
+		}
+
+		if (AbstractRailBlock.isRail(state)) {
+			return state.get(((AbstractRailBlock) state.getBlock()).getShapeProperty());
+		}
+		return null;
 	}
 
 /* --- AbstractMinecartEntity methods --- */
@@ -251,18 +267,13 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 	}
 
 	protected void applyAcceleration() {
-		BlockState state = this.getBlockStateAtPos();
-		BlockState state_below = this.world.getBlockState(this.getBlockPos().down());
-		if (state_below.isIn(BlockTags.RAILS)) {
-			state = state_below;
-		}
+		RailShape railShape = this.getRailShapeAtPos();
 
-		if (AbstractRailBlock.isRail(state)) {
-			RailShape railShape = state.get(((AbstractRailBlock)state.getBlock()).getShapeProperty());
+		if(railShape != null) {
 			this.travelDirection = Util.alignDirWithRail(this.travelDirection, railShape);
 
-			if(!this.cachedTrainState.isStopped()) {
-				double dynamicVelocityMultiplier = this.cachedTrainState.getCurrentSpeed();
+			if(!this.trainState.isStopped()) {
+				double dynamicVelocityMultiplier = this.trainState.getCurrentSpeed();
 
 				// have child minecarts speed up or slow down to maintain the correct distance from the locomotive
 				if (!this.isFurnace()) {
@@ -280,21 +291,6 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 						dynamicVelocityMultiplier /= 0.75;
 					}
 					this.setCustomName(Text.literal(railShape.name()));
-				}
-
-				// reduce velocity when going uphill/downhill, and when in water
-				if(railShape.isAscending()) {
-					if(Util.isTravelingUphill(this.travelDirection, railShape)) {
-						this.setCustomName(Text.literal(this.getCustomName() + " up"));
-						dynamicVelocityMultiplier *= 0.7;
-					} else {
-						this.setCustomName(Text.literal(this.getCustomName() + " down"));
-						dynamicVelocityMultiplier *= 0.6;
-					}
-				}
-				if (this.isTouchingWater()) {
-					this.setCustomName(Text.literal(this.getCustomName() + " water"));
-					//dynamicVelocityMultiplier *= 0.95;
 				}
 
 				this.setVelocity(Vec3d.of(this.travelDirection.getVector())

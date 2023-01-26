@@ -2,6 +2,8 @@ package io.github.penguin_spy.onarail;
 
 import net.minecraft.nbt.NbtCompound;
 
+import java.util.HashSet;
+
 /**
  * Stores information about the whole train, such as speed, if it's moving, etc.
  * Each minecart of a train has a reference to its trains' instance (created by the locomotive)
@@ -47,10 +49,7 @@ public class TrainState {
 			if(onARailNbt.contains(TRAIN_STATE_TAG)) {
 				NbtCompound trainStateNbt = onARailNbt.getCompound(TRAIN_STATE_TAG);
 				if(trainStateNbt.contains(TARGET_SPEED_TAG)) {
-					// todo: provide better error/handle when this string isn't a real speed value
-					//  /data modify says "an unexpected error occurred while trying to run that command",
-					//  and i'm pretty sure it will crash on world load
-					this.targetSpeed = Speed.valueOf(trainStateNbt.getString(TARGET_SPEED_TAG));
+					this.targetSpeed = Speed.fromName(trainStateNbt.getString(TARGET_SPEED_TAG));
 				}
 				if(trainStateNbt.contains(CURRENT_SPEED_TAG)) {
 					this.currentSpeed = trainStateNbt.getDouble(CURRENT_SPEED_TAG);
@@ -73,6 +72,21 @@ public class TrainState {
 		Speed(double metersPerSecond) { this.value = metersPerSecond / 20; }
 
 		public double getValue() { return this.value; }
+
+		public static Speed fromName(String name) {
+			if(staticValues.contains(name)) {
+				return valueOf(name);
+			}
+			OnARail.LOGGER.warn("Constructing Speed from invalid name: '%s'".formatted(name));
+			return MEDIUM; // default speed
+		}
+
+		private static final HashSet<String> staticValues = new HashSet<>();
+		static {
+			for(Speed speed : Speed.values()) {
+				staticValues.add(speed.name());
+			}
+		}
 	}
 }
 

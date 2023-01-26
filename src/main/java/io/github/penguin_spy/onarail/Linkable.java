@@ -1,5 +1,6 @@
 package io.github.penguin_spy.onarail;
 
+import net.minecraft.block.enums.RailShape;
 import net.minecraft.entity.Entity;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
@@ -31,6 +32,7 @@ public interface Linkable {
 	boolean isInTrain();
 
 	TrainState getTrainState();
+	RailShape getRailShapeAtPos();
 
 	boolean isRemoved();
 	float distanceTo(Entity entity);

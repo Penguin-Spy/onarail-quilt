@@ -9,12 +9,12 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.PoweredRailBlock;
 import net.minecraft.block.RailBlock;
+import net.minecraft.block.enums.RailShape;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.mob.PiglinBrain;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.entity.vehicle.FurnaceMinecartEntity;
 import net.minecraft.inventory.Inventories;
 import net.minecraft.inventory.SidedInventory;
@@ -46,7 +46,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.Optional;
 
 @Mixin(FurnaceMinecartEntity.class)
-public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity implements SidedInventory, Linkable {
+public abstract class MixinFurnaceMinecartEntity extends MixinAbstractMinecartEntity implements SidedInventory, Linkable {
 	protected MixinFurnaceMinecartEntity(EntityType<?> entityType, World world) {
 		super(entityType, world);
 	}
@@ -60,8 +60,6 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 
 	private DefaultedList<ItemStack> inventory;
 	private boolean shouldTryRefuel = false;
-	private TrainState trainState;
-
 
 	// real constructor
 	@Inject(method="<init>*", at = @At("RETURN"))
@@ -179,14 +177,33 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 				this.fuel--;
 				this.shouldTryRefuel = this.fuel <= 0;
 
-				// accelerate at 1m/s²
 				double targetSpeed = trainState.getTargetSpeedValue();
 				double currentSpeed = trainState.getCurrentSpeed();
+				RailShape railShape = this.getRailShapeAtPos();
+
+				// determine speed based on the conditions of the furnace minecart (should eventually base this on all carts' status)
+				if (railShape != null && railShape.isAscending()) {
+					if (Util.isTravelingUphill(this.travelDirection, railShape)) {
+						this.setCustomName(Text.literal(this.getCustomName() + " up"));
+						targetSpeed *= 0.7;
+					} else {
+						this.setCustomName(Text.literal(this.getCustomName() + " down"));
+						targetSpeed *= 0.6;	// once i fix trains staying together downhill, this should instead increase the speed
+					}
+				}
+				if(this.isTouchingWater()) {
+					this.setCustomName(Text.literal(this.getCustomName() + " water"));
+					targetSpeed *= 0.5;
+				}
+
+				// accelerate at 0.2m/s²
 				if(currentSpeed < targetSpeed) {
 					trainState.setCurrentSpeed(Math.round((currentSpeed + 0.01) * 100) / 100.0);
 				} else if(currentSpeed > targetSpeed) {
 					trainState.setCurrentSpeed(Math.round((currentSpeed - 0.01) * 100) / 100.0);
 				}
+
+
 			} else { // the train is currently stopped
 				trainState.setCurrentSpeed(0.0);
 			}
@@ -276,10 +293,12 @@ public abstract class MixinFurnaceMinecartEntity extends AbstractMinecartEntity 
 
 /* --- Linkable methods --- */
 
+	@Override
 	public TrainState getTrainState() {
 		return this.trainState;
 	}
 
+	@Override
 	public boolean isFurnace() {
 		return true;
 	}

@@ -206,7 +206,13 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 		return null;
 	}
 
-/* --- AbstractMinecartEntity methods --- */
+	public double horizontalDistanceTo(Entity entity) {
+		double dx = (this.getX() - entity.getX());
+		double dz = (this.getZ() - entity.getZ());
+		return Math.sqrt(dx * dx + dz * dz);
+	}
+
+	/* --- AbstractMinecartEntity methods --- */
 
 	@Override
 	public ActionResult interact(PlayerEntity eitherPlayer, Hand hand) {
@@ -295,7 +301,7 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 
 				// have child minecarts speed up or slow down to maintain the correct distance from the locomotive
 				if (!this.isFurnace()) {
-					float distToParent = this.getParent().distanceTo(this);
+					double distToParent = this.getParent().horizontalDistanceTo(this);
 
 					if (distToParent > Util.MINECART_LINK_RANGE) {
 						this.parentMinecart.removeChild();

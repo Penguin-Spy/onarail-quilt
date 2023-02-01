@@ -16,7 +16,6 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.*;
@@ -297,32 +296,32 @@ public abstract class MixinAbstractMinecartEntity extends Entity implements Link
 			this.travelDirection = Util.alignDirWithRail(this.travelDirection, railShape);
 
 			double currentSpeed = this.trainState.getCurrentSpeed();
-			if(currentSpeed > 0) {
 
-				// have child minecarts speed up or slow down to maintain the correct distance from the locomotive
-				if (!this.isFurnace()) {
-					double distToParent = this.getParent().horizontalDistanceTo(this);
+			// have child minecarts speed up or slow down to maintain the correct distance from the locomotive
+			if (!this.isFurnace()) {
+				double targetDistToParent = (currentSpeed > 0)? 1.65 : 1.05;
+				double distToParent = this.getParent().horizontalDistanceTo(this);
 
-					if (distToParent > Util.MINECART_LINK_RANGE) {
-						this.parentMinecart.removeChild();
-					} else if (distToParent > 1.65) {
-						currentSpeed += 1 + (10 * (distToParent - 1.65));
-					} else if (distToParent < 1.6) {
-						currentSpeed -= 2;
-					}
-
-					if (this.hasPassengers()) {    // account for moveOnRail's reduction
-						currentSpeed /= 0.75;
-					}
-					this.setCustomName(Text.literal(railShape.name()));
+				if (distToParent > Util.MINECART_LINK_RANGE) {
+					this.parentMinecart.removeChild();
+				} else if (distToParent > targetDistToParent) {
+					currentSpeed += 1 + (10 * (distToParent - targetDistToParent));
+				} else if (distToParent < targetDistToParent - 0.05) {
+					currentSpeed -= 2;
+				} else if(currentSpeed <= 0) { // if we're close enough & stopped
+					this.setVelocity(Vec3d.ZERO);
 				}
 
-				this.setVelocity(Vec3d.of(this.travelDirection.getVector())
-								.multiply(currentSpeed / 20));
+				if (this.hasPassengers()) {    // account for moveOnRail's reduction
+					currentSpeed /= 0.75;
+				}
 
-			} else {
+			} else if(currentSpeed <= 0) { // stop furnace minecarts
 				this.setVelocity(Vec3d.ZERO);
 			}
+
+			this.setVelocity(Vec3d.of(this.travelDirection.getVector())
+							.multiply(currentSpeed / 20));
 		}
 	}
 
